@@ -26,6 +26,7 @@ all = ["proxy_manage_stats"]
 [dev-dependencies]
 tempfile.workspace = true
 codspeed-criterion-compat.workspace = true
+reqwest = { workspace = true, features = ["json"] }
 
 [[bench]]
 name = "proxy_manager_bench"
