@@ -1,0 +1,32 @@
+[package]
+name = "proxy-fork-core"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+tokio-rustls.workspace = true
+http.workspace = true
+rustls-native-certs.workspace = true
+x509-parser.workspace = true
+time.workspace = true
+derive_builder.workspace = true
+etcetera.workspace = true
+hudsucker.workspace = true
+tracing.workspace = true
+fs-err.workspace = true
+regex.workspace = true
+lru.workspace = true
+
+[features]
+proxy_manage_stats = []
+all = ["proxy_manage_stats"]
+
+[dev-dependencies]
+tempfile.workspace = true
+codspeed-criterion-compat.workspace = true
+
+[[bench]]
+name = "proxy_manager_bench"
+harness = false

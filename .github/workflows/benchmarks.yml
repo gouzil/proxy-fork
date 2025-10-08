@@ -1,0 +1,70 @@
+name: Continuous Benchmarking
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  benchmarks:
+    name: Run benchmarks
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-bench-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Run benchmarks with CodSpeed
+        uses: CodSpeedHQ/action@v2
+        with:
+          # CodSpeed token (需要在 GitHub Secrets 中设置)
+          token: ${{ secrets.CODSPEED_TOKEN }}
+          # 运行基准测试
+          run: |
+            cargo codspeed build --package proxy-fork-core
+            cargo codspeed run --package proxy-fork-core --bench proxy_manager_bench
+          
+      # 可选：也可以运行普通的 cargo bench 并保存结果
+      - name: Run standard benchmarks
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo bench --package proxy-fork-core --bench proxy_manager_bench -- --output-format bencher | tee bench_output.txt
+          
+      - name: Comment benchmark results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const benchOutput = fs.readFileSync('bench_output.txt', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📊 Benchmark Results\n\n\`\`\`\n${benchOutput}\n\`\`\``
+            });

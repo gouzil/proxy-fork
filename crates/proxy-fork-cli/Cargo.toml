@@ -1,0 +1,24 @@
+[package]
+name = "proxy-fork-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+proxy-fork-core.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+sysproxy.workspace = true
+etcetera.workspace = true
+clap = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+toml.workspace = true
+fs-err.workspace = true
+derive_builder.workspace = true
+anyhow.workspace = true
+
+
+[dev-dependencies]
+tempfile.workspace = true

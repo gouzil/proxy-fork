@@ -1,0 +1,4 @@
+edition = "2024"                  # 设置 Rust 版本为 2024
+# use_small_heuristics = "Max"      # 设置换行策略
+# newline_style = "Auto"            # 设置换行符风格，根据平台自动选择
+style_edition = "2024"
