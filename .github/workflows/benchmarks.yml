@@ -27,6 +27,6 @@ jobs:
       - name: Run benchmarks with CodSpeed
         uses: CodSpeedHQ/action@v4
         with:
-          mode: incremental
+          mode: instrumentation
           # 运行基准测试
           run: cargo codspeed run
