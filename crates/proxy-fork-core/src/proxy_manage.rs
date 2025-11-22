@@ -105,6 +105,105 @@ impl ProxyManager {
     }
 }
 
+// 为 ProxyManager 添加可读的格式化输出
+impl std::fmt::Display for ProxyManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // 基本统计信息
+        let exact = self.exact_rule_count();
+        let pattern = self.pattern_rule_count();
+
+        writeln!(
+            f,
+            "ProxyManager Rules: total={} (exact={}, pattern={})",
+            exact + pattern,
+            exact,
+            pattern
+        )?;
+
+        // 输出前 N 条规则（避免输出过多内容）
+        const MAX_SHOW: usize = 20;
+        let mut shown = 0;
+
+        // 准备辅助格式化闭包
+        let proto_str = |p: Protocol| match p {
+            Protocol::Http => "http",
+            Protocol::Https => "https",
+            Protocol::Ws => "ws",
+            Protocol::Wss => "wss",
+        };
+
+        let fmt_address = |a: &Address| {
+            let scheme = proto_str(a.protocol);
+            let authority = if let Some(port) = a.port {
+                format!("{}:{}", a.host, port)
+            } else {
+                a.host.clone()
+            };
+            let path = a.path.as_deref().unwrap_or("/");
+            format!("{}://{}{}", scheme, authority, path)
+        };
+
+        let fmt_pattern = |p: &AddressPattern| {
+            let scheme = proto_str(p.protocol);
+            let host_pat = match &p.pattern_type.host {
+                PatternMatcher::Exact(s) => s.clone(),
+                PatternMatcher::Wildcard(s) => s.clone(),
+                PatternMatcher::Regex { pattern, .. } => format!("re:{}", pattern),
+            };
+            let port = if let Some(port) = p.port {
+                format!(":{}", port)
+            } else {
+                String::new()
+            };
+            let path_pat = match &p.pattern_type.path {
+                None => String::new(),
+                Some(PatternMatcher::Exact(s)) => s.clone(),
+                Some(PatternMatcher::Wildcard(s)) => s.clone(),
+                Some(PatternMatcher::Regex { pattern, .. }) => format!("re:{}", pattern),
+            };
+            format!("{}://{}{}{}", scheme, host_pat, port, path_pat)
+        };
+
+        // 输出精确规则（每条一行）
+        for (key, target) in &self.exact_rules {
+            if shown >= MAX_SHOW {
+                break;
+            }
+            let path = key.path.as_deref().unwrap_or("/");
+            let pat = format!("{}://{}{}", proto_str(key.protocol), key.host, path);
+            writeln!(f, "EXACT {} -> {}", pat, fmt_address(target))?;
+            shown += 1;
+        }
+
+        // 如果还没到上限，继续输出 pattern rules
+        if shown < MAX_SHOW {
+            for rule in &self.pattern_rules {
+                if shown >= MAX_SHOW {
+                    break;
+                }
+                // 简单序列化 pattern -> target（单行）
+                writeln!(
+                    f,
+                    "PATTERN {} -> {}",
+                    fmt_pattern(&rule.pattern),
+                    fmt_address(&rule.target)
+                )?;
+                shown += 1;
+            }
+        }
+
+        if exact + pattern > MAX_SHOW {
+            writeln!(
+                f,
+                "...and {} more rules omitted",
+                exact + pattern - MAX_SHOW
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
 impl ProxyManager {
     /// 添加代理规则
     ///

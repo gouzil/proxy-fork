@@ -5,9 +5,8 @@ use std::{
 };
 
 use proxy_fork_core::{
-    Address, AddressBuilder, AddressPattern, CaEnum, CertInput, HttpProxyHandlerBuilder, NoCa,
-    PathTransformMode, Protocol, Proxy, ProxyManager, load_ca_from_sources,
-    rustls::crypto::aws_lc_rs,
+    Address, AddressBuilder, AddressPattern, CaEnum, CertInput, NoCa, PathTransformMode, Protocol,
+    Proxy, ProxyHandlerBuilder, ProxyManager, load_ca_from_sources, rustls::crypto::aws_lc_rs,
 };
 use sysproxy::Sysproxy;
 use tokio::sync::{Mutex, RwLock};
@@ -125,12 +124,17 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
         }
     }
 
-    // 初始化 proxy handler
-    let proxy_handler = HttpProxyHandlerBuilder::default()
-        .proxy_manager(Arc::new(RwLock::new(proxy_manager)))
-        .with_ca(cfg.enable_ca)
-        .build()
-        .unwrap();
+    // 创建共享的 proxy manager
+    let proxy_manager_arc = Arc::new(RwLock::new(proxy_manager));
+
+    // 初始化单个 proxy handler（共享同一个 proxy manager）
+    let proxy_handler = Arc::new(
+        ProxyHandlerBuilder::default()
+            .proxy_manager(proxy_manager_arc.clone())
+            .with_ca(cfg.enable_ca)
+            .build()
+            .unwrap(),
+    );
 
     // 系统代理配置
     let sysproxy = if cfg.enable_sysproxy {
@@ -165,14 +169,50 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
         // .with_ca(NoCa)
         .with_ca(ca)
         .with_rustls_connector(aws_lc_rs::default_provider())
-        .with_http_handler(proxy_handler)
-        // .with_websocket_handler(proxy_handler.clone())
+        .with_http_handler((*proxy_handler).clone())
+        .with_websocket_handler((*proxy_handler).clone())
         .with_graceful_shutdown(shutdown_signal(sysproxy.clone()))
         .build()
         .expect("Failed to create proxy");
 
+    print_server_info(cfg, proxy_manager_arc).await?;
+
     if let Err(e) = proxy.start().await {
         error!("{}", e);
     }
+    Ok(())
+}
+
+async fn print_server_info(
+    cfg: &AppConfig,
+    proxy_manager: Arc<RwLock<ProxyManager>>,
+) -> anyhow::Result<()> {
+    let listen_ip = if cfg.listen.host == "localhost" {
+        IpAddr::from([127, 0, 0, 1])
+    } else {
+        cfg.listen
+            .host
+            .parse()
+            .unwrap_or(IpAddr::from([127, 0, 0, 1]))
+    };
+    info!(
+        "Proxy server listening on {}:{}",
+        listen_ip, cfg.listen.port
+    );
+    if cfg.enable_sysproxy {
+        info!("System proxy is enabled");
+    } else {
+        info!("System proxy is disabled");
+    }
+    if cfg.enable_ca {
+        info!("CA is enabled");
+    } else {
+        info!("CA is disabled");
+    }
+
+    // 打印所有规则（使用 ProxyManager 的 Display 实现）
+    let manager = proxy_manager.read().await;
+    info!("{}", manager);
+
     Ok(())
 }
