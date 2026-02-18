@@ -67,7 +67,6 @@ impl HttpHandler for ProxyHandler {
 impl WebSocketHandler for ProxyHandler {
     async fn handle_message(&mut self, ctx: &WebSocketContext, msg: Message) -> Option<Message> {
         debug!("WebSocket message: {:?}", msg);
-        let manager = self.proxy_manager.read().await;
         match ctx {
             WebSocketContext::ClientToServer { src, dst, .. } => {
                 // 处理来自客户端的消息

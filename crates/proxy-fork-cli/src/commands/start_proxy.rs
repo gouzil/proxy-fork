@@ -1,5 +1,5 @@
 use std::{
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, SocketAddr, ToSocketAddrs},
     str::FromStr,
     sync::Arc,
 };
@@ -17,6 +17,34 @@ use crate::{
     config::AppConfig,
     dirs::{APP_NAME, default_cert_path, default_private_key_path},
 };
+
+fn resolve_listen_ip(host: &str) -> anyhow::Result<IpAddr> {
+    if host.eq_ignore_ascii_case("localhost") {
+        return Ok(IpAddr::from([127, 0, 0, 1]));
+    }
+
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Ok(ip);
+    }
+
+    let resolved: Vec<SocketAddr> = (host, 0)
+        .to_socket_addrs()
+        .map_err(|e| anyhow::anyhow!("invalid listen host '{}': {}", host, e))?
+        .collect();
+
+    if resolved.is_empty() {
+        anyhow::bail!(
+            "invalid listen host '{}': hostname resolved to no addresses",
+            host
+        );
+    }
+
+    if let Some(v4) = resolved.iter().find(|addr| addr.is_ipv4()) {
+        return Ok(v4.ip());
+    }
+
+    Ok(resolved[0].ip())
+}
 
 async fn shutdown_signal(sysproxy: Option<Arc<Mutex<Sysproxy>>>) {
     // 支持两种关闭方式，一种是 Ctrl+C，另一种是通过 channel 发送关闭信号
@@ -128,13 +156,11 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
     let proxy_manager_arc = Arc::new(RwLock::new(proxy_manager));
 
     // 初始化单个 proxy handler（共享同一个 proxy manager）
-    let proxy_handler = Arc::new(
-        ProxyHandlerBuilder::default()
-            .proxy_manager(proxy_manager_arc.clone())
-            .with_ca(cfg.enable_ca)
-            .build()
-            .unwrap(),
-    );
+    let proxy_handler = ProxyHandlerBuilder::default()
+        .proxy_manager(proxy_manager_arc.clone())
+        .with_ca(cfg.enable_ca)
+        .build()
+        .unwrap();
 
     // 系统代理配置
     let sysproxy = if cfg.enable_sysproxy {
@@ -156,26 +182,19 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
         }
     }
 
-    let listen_ip = if cfg.listen.host == "localhost" {
-        IpAddr::from([127, 0, 0, 1])
-    } else {
-        cfg.listen
-            .host
-            .parse()
-            .unwrap_or(IpAddr::from([127, 0, 0, 1]))
-    };
+    let listen_ip = resolve_listen_ip(&cfg.listen.host)?;
     let proxy = Proxy::builder()
         .with_addr(SocketAddr::from((listen_ip, cfg.listen.port)))
         // .with_ca(NoCa)
         .with_ca(ca)
         .with_rustls_connector(aws_lc_rs::default_provider())
-        .with_http_handler((*proxy_handler).clone())
-        .with_websocket_handler((*proxy_handler).clone())
+        .with_http_handler(proxy_handler.clone())
+        // .with_websocket_handler(proxy_handler.clone())
         .with_graceful_shutdown(shutdown_signal(sysproxy.clone()))
         .build()
         .expect("Failed to create proxy");
 
-    print_server_info(cfg, proxy_manager_arc).await?;
+    print_server_info(cfg, proxy_manager_arc, listen_ip).await?;
     info!("Proxy service startup complete. Ready to accept requests.");
     info!("Press Ctrl+C to stop the proxy service.");
 
@@ -188,15 +207,8 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
 async fn print_server_info(
     cfg: &AppConfig,
     proxy_manager: Arc<RwLock<ProxyManager>>,
+    listen_ip: IpAddr,
 ) -> anyhow::Result<()> {
-    let listen_ip = if cfg.listen.host == "localhost" {
-        IpAddr::from([127, 0, 0, 1])
-    } else {
-        cfg.listen
-            .host
-            .parse()
-            .unwrap_or(IpAddr::from([127, 0, 0, 1]))
-    };
     info!(
         "Proxy server listening on {}:{}",
         listen_ip, cfg.listen.port
