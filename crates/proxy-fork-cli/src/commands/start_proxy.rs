@@ -176,6 +176,8 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
         .expect("Failed to create proxy");
 
     print_server_info(cfg, proxy_manager_arc).await?;
+    info!("Proxy service startup complete. Ready to accept requests.");
+    info!("Press Ctrl+C to stop the proxy service.");
 
     if let Err(e) = proxy.start().await {
         error!("{}", e);

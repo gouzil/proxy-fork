@@ -44,3 +44,20 @@ impl PatternMatcher {
         }
     }
 }
+
+impl std::fmt::Display for PatternMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PatternMatcher::Exact(pattern) | PatternMatcher::Wildcard(pattern) => {
+                write!(f, "{}", pattern)
+            }
+            PatternMatcher::Regex { pattern, .. } => {
+                if pattern.starts_with("re:") {
+                    write!(f, "{}", pattern)
+                } else {
+                    write!(f, "re:{}", pattern)
+                }
+            }
+        }
+    }
+}
