@@ -52,6 +52,18 @@ impl ExactKey {
     }
 }
 
+impl std::fmt::Display for ExactKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let authority = if let Some(port) = self.port {
+            format!("{}:{}", self.host, port)
+        } else {
+            self.host.clone()
+        };
+        let path = self.path.as_deref().unwrap_or("/");
+        write!(f, "{}://{}{}", self.protocol, authority, path)
+    }
+}
+
 #[derive(Debug)]
 // 代理管理器（优化版：混合索引 + LRU 缓存）
 pub struct ProxyManager {
@@ -102,6 +114,76 @@ impl ProxyManager {
     /// 便捷访问 builder：`ProxyManagerConfig::builder()` 的包装
     pub fn builder() -> ProxyManagerConfigBuilder {
         ProxyManagerConfigBuilder::default()
+    }
+}
+
+// 为 ProxyManager 添加可读的格式化输出
+impl std::fmt::Display for ProxyManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let exact = self.exact_rule_count();
+        let pattern = self.pattern_rule_count();
+        let total = exact + pattern;
+
+        writeln!(
+            f,
+            "Proxy rules summary: total={} (exact={}, pattern={})",
+            total, exact, pattern
+        )?;
+
+        if total == 0 {
+            writeln!(f, "No active proxy rules.")?;
+            return Ok(());
+        }
+
+        const MAX_SHOW_PER_SECTION: usize = 10;
+
+        let mut exact_rules: Vec<(String, String)> = self
+            .exact_rules
+            .iter()
+            .map(|(key, target)| (key.to_string(), target.to_string()))
+            .collect();
+        exact_rules.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        if !exact_rules.is_empty() {
+            writeln!(f, "Exact rules ({}) [fast lookup]:", exact_rules.len())?;
+            for (idx, (pattern_text, target_text)) in
+                exact_rules.iter().take(MAX_SHOW_PER_SECTION).enumerate()
+            {
+                writeln!(f, "  {:>2}. {} -> {}", idx + 1, pattern_text, target_text)?;
+            }
+            if exact_rules.len() > MAX_SHOW_PER_SECTION {
+                writeln!(
+                    f,
+                    "  ... {} more exact rules omitted",
+                    exact_rules.len() - MAX_SHOW_PER_SECTION
+                )?;
+            }
+        }
+
+        if !self.pattern_rules.is_empty() {
+            writeln!(
+                f,
+                "Pattern rules ({}) [checked in listed order]:",
+                self.pattern_rules.len()
+            )?;
+            for (idx, rule) in self
+                .pattern_rules
+                .iter()
+                .take(MAX_SHOW_PER_SECTION)
+                .enumerate()
+            {
+                writeln!(f, "  {:>2}. {} -> {}", idx + 1, rule.pattern, rule.target)?;
+            }
+            if self.pattern_rules.len() > MAX_SHOW_PER_SECTION {
+                writeln!(
+                    f,
+                    "  ... {} more pattern rules omitted",
+                    self.pattern_rules.len() - MAX_SHOW_PER_SECTION
+                )?;
+            }
+        }
+
+        Ok(())
     }
 }
 

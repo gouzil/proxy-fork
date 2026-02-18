@@ -12,6 +12,15 @@ pub enum Protocol {
     Https,
 }
 
+impl std::fmt::Display for Protocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Protocol::Http => write!(f, "http"),
+            Protocol::Https => write!(f, "https"),
+        }
+    }
+}
+
 impl TryFrom<&Uri> for Protocol {
     type Error = ();
 
@@ -77,6 +86,18 @@ pub struct Address {
     /// 路径转换模式（默认为 Preserve）
     #[builder(default)]
     pub path_transform_mode: PathTransformMode,
+}
+
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let authority = if let Some(port) = self.port {
+            format!("{}:{}", self.host, port)
+        } else {
+            self.host.clone()
+        };
+        let path = self.path.as_deref().unwrap_or("/");
+        write!(f, "{}://{}{}", self.protocol, authority, path)
+    }
 }
 
 impl Address {
@@ -241,6 +262,23 @@ pub struct AddressPattern {
     #[builder(default)]
     pub port: Option<u16>,
     pub pattern_type: PatternType,
+}
+
+impl std::fmt::Display for AddressPattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let port = self.port.map_or_else(String::new, |p| format!(":{}", p));
+        let path = self
+            .pattern_type
+            .path
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        write!(
+            f,
+            "{}://{}{}{}",
+            self.protocol, self.pattern_type.host, port, path
+        )
+    }
 }
 
 impl AddressPattern {

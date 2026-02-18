@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use hudsucker::Proxy;
 use proxy_fork_core::{
-    Address, AddressPattern, HttpProxyHandlerBuilder, NoCa, PatternMatcher, PatternType, Protocol,
+    Address, AddressPattern, NoCa, PatternMatcher, PatternType, Protocol, ProxyHandlerBuilder,
     ProxyManager, rustls,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -90,7 +90,7 @@ async fn test_end_to_end_proxy() {
     let proxy_manager = Arc::new(RwLock::new(proxy_manager));
 
     // Create proxy handler
-    let handler = HttpProxyHandlerBuilder::default()
+    let handler = ProxyHandlerBuilder::default()
         .proxy_manager(proxy_manager)
         .build()
         .unwrap();

@@ -1,13 +1,12 @@
 use std::{
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, SocketAddr, ToSocketAddrs},
     str::FromStr,
     sync::Arc,
 };
 
 use proxy_fork_core::{
-    Address, AddressBuilder, AddressPattern, CaEnum, CertInput, HttpProxyHandlerBuilder, NoCa,
-    PathTransformMode, Protocol, Proxy, ProxyManager, load_ca_from_sources,
-    rustls::crypto::aws_lc_rs,
+    Address, AddressBuilder, AddressPattern, CaEnum, CertInput, NoCa, PathTransformMode, Protocol,
+    Proxy, ProxyHandlerBuilder, ProxyManager, load_ca_from_sources, rustls::crypto::aws_lc_rs,
 };
 use sysproxy::Sysproxy;
 use tokio::sync::{Mutex, RwLock};
@@ -18,6 +17,34 @@ use crate::{
     config::AppConfig,
     dirs::{APP_NAME, default_cert_path, default_private_key_path},
 };
+
+fn resolve_listen_ip(host: &str) -> anyhow::Result<IpAddr> {
+    if host.eq_ignore_ascii_case("localhost") {
+        return Ok(IpAddr::from([127, 0, 0, 1]));
+    }
+
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Ok(ip);
+    }
+
+    let resolved: Vec<SocketAddr> = (host, 0)
+        .to_socket_addrs()
+        .map_err(|e| anyhow::anyhow!("invalid listen host '{}': {}", host, e))?
+        .collect();
+
+    if resolved.is_empty() {
+        anyhow::bail!(
+            "invalid listen host '{}': hostname resolved to no addresses",
+            host
+        );
+    }
+
+    if let Some(v4) = resolved.iter().find(|addr| addr.is_ipv4()) {
+        return Ok(v4.ip());
+    }
+
+    Ok(resolved[0].ip())
+}
 
 async fn shutdown_signal(sysproxy: Option<Arc<Mutex<Sysproxy>>>) {
     // 支持两种关闭方式，一种是 Ctrl+C，另一种是通过 channel 发送关闭信号
@@ -125,9 +152,12 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
         }
     }
 
-    // 初始化 proxy handler
-    let proxy_handler = HttpProxyHandlerBuilder::default()
-        .proxy_manager(Arc::new(RwLock::new(proxy_manager)))
+    // 创建共享的 proxy manager
+    let proxy_manager_arc = Arc::new(RwLock::new(proxy_manager));
+
+    // 初始化单个 proxy handler（共享同一个 proxy manager）
+    let proxy_handler = ProxyHandlerBuilder::default()
+        .proxy_manager(proxy_manager_arc.clone())
         .with_ca(cfg.enable_ca)
         .build()
         .unwrap();
@@ -152,27 +182,51 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
         }
     }
 
-    let listen_ip = if cfg.listen.host == "localhost" {
-        IpAddr::from([127, 0, 0, 1])
-    } else {
-        cfg.listen
-            .host
-            .parse()
-            .unwrap_or(IpAddr::from([127, 0, 0, 1]))
-    };
+    let listen_ip = resolve_listen_ip(&cfg.listen.host)?;
     let proxy = Proxy::builder()
         .with_addr(SocketAddr::from((listen_ip, cfg.listen.port)))
         // .with_ca(NoCa)
         .with_ca(ca)
         .with_rustls_connector(aws_lc_rs::default_provider())
-        .with_http_handler(proxy_handler)
+        .with_http_handler(proxy_handler.clone())
         // .with_websocket_handler(proxy_handler.clone())
         .with_graceful_shutdown(shutdown_signal(sysproxy.clone()))
         .build()
         .expect("Failed to create proxy");
 
+    print_server_info(cfg, proxy_manager_arc, listen_ip).await?;
+    info!("Proxy service startup complete. Ready to accept requests.");
+    info!("Press Ctrl+C to stop the proxy service.");
+
     if let Err(e) = proxy.start().await {
         error!("{}", e);
     }
+    Ok(())
+}
+
+async fn print_server_info(
+    cfg: &AppConfig,
+    proxy_manager: Arc<RwLock<ProxyManager>>,
+    listen_ip: IpAddr,
+) -> anyhow::Result<()> {
+    info!(
+        "Proxy server listening on {}:{}",
+        listen_ip, cfg.listen.port
+    );
+    if cfg.enable_sysproxy {
+        info!("System proxy is enabled");
+    } else {
+        info!("System proxy is disabled");
+    }
+    if cfg.enable_ca {
+        info!("CA is enabled");
+    } else {
+        info!("CA is disabled");
+    }
+
+    // 打印所有规则（使用 ProxyManager 的 Display 实现）
+    let manager = proxy_manager.read().await;
+    info!("{}", manager);
+
     Ok(())
 }
