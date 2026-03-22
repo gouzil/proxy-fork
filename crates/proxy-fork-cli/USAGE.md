@@ -89,14 +89,14 @@ rules = [
 
 ## 规则格式说明（CLI 与 TOML 通用字段）
 
-- protocol: http | https（必填）
+- protocol: http | https | ws | wss（必填；ws/wss 会分别按 http/https 规则匹配）
 - host: 匹配的主机（必填）；支持：
   - 精确匹配：example.com
   - 通配符：*.example.com 或 /api/*（路径）
   - 正则：以 `re:` 前缀，例如 `re:^api/v[0-9]+/users$`
 - path: 匹配路径（可选）；支持精确/通配符/正则
 - port: 匹配端口（可选）
-- target_protocol: 目标协议（默认 http）
+- target_protocol: 目标协议（默认 http；支持 http | https | ws | wss）
 - target_host: 目标主机（必填）
 - target_port: 目标端口（可选）
 - path_transform: preserve | prepend | replace（可选；默认 preserve）

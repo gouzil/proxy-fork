@@ -31,18 +31,21 @@ impl TryFrom<&Uri> for Protocol {
             .to_ascii_lowercase()
             .as_str()
         {
-            "http" => Ok(Protocol::Http),
-            "https" => Ok(Protocol::Https),
+            // WebSocket uses ws/wss at URI level, but matching semantics are
+            // equivalent to http/https in proxy rules.
+            "http" | "ws" => Ok(Protocol::Http),
+            "https" | "wss" => Ok(Protocol::Https),
             _ => Err(()),
         }
     }
 }
 
 /// 路径转换模式
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PathTransformMode {
     /// 保留原始路径：只改变协议、主机和端口
     /// 例: https://example.com/api/users -> http://localhost:8080/api/users
+    #[default]
     Preserve,
 
     /// 前缀拼接：将指定路径作为前缀拼接到原始路径前面
@@ -52,12 +55,6 @@ pub enum PathTransformMode {
     /// 前缀替换：将匹配的路径前缀替换为新的前缀
     /// 例: https://example.com/api/v1/users -> http://localhost:8080/api/v2/users
     Replace,
-}
-
-impl Default for PathTransformMode {
-    fn default() -> Self {
-        Self::Preserve
-    }
 }
 
 impl std::str::FromStr for PathTransformMode {
@@ -228,9 +225,8 @@ impl Address {
                 if let (Some(new_prefix), Some(old_prefix)) = (&self.path, matched_prefix) {
                     let old_prefix_clean = old_prefix.trim_end_matches('*').trim_end_matches('/');
 
-                    if original_path.starts_with(old_prefix_clean) {
+                    if let Some(suffix) = original_path.strip_prefix(old_prefix_clean) {
                         // 提取匹配前缀之后的部分
-                        let suffix = &original_path[old_prefix_clean.len()..];
                         let new_prefix_clean = new_prefix.trim_end_matches('/');
 
                         // 拼接新的路径
@@ -319,10 +315,10 @@ impl AddressPattern {
         }
 
         // port 匹配：如果模式指定了端口，则必须相等
-        if let Some(pattern_port) = self.port {
-            if address.port != Some(pattern_port) {
-                return false;
-            }
+        if let Some(pattern_port) = self.port
+            && address.port != Some(pattern_port)
+        {
+            return false;
         }
 
         // host 匹配
