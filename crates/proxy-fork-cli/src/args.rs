@@ -52,7 +52,7 @@ pub struct StartProxyArgs {
     pub listen: Option<String>,
 
     /// 通过 CLI 添加规则，可多次传入；格式：
-    /// protocol=http|https,host=example.com[,path=/api/*][,port=443],target_host=127.0.0.1[,target_port=8080][,target_protocol=http|https][,path_transform=preserve|prepend|replace][,target_path=/new]
+    /// protocol=http|https|ws|wss,host=example.com[,path=/api/*][,port=443],target_host=127.0.0.1[,target_port=8080][,target_protocol=http|https|ws|wss][,path_transform=preserve|prepend|replace][,target_path=/new]
     #[arg(long = "rule", value_name = "RULE", value_parser = parse_rule_arg)]
     pub rules: Vec<RuleItem>,
 
@@ -78,7 +78,7 @@ pub struct GenCaArgs {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct RuleItem {
-    /// protocol: "http" | "https"
+    /// protocol: "http" | "https" | "ws" | "wss"
     pub protocol: String,
     /// 需要代理的域名（支持通配符或正则规则）
     pub host: String,
@@ -114,16 +114,16 @@ pub(crate) fn parse_rule_arg(s: &str) -> Result<RuleItem, String> {
     let get = |k: &str| map.get(k).cloned();
     let required = |k: &str| get(k).ok_or_else(|| format!("missing required key: {}", k));
 
-    let protocol = required("protocol")?;
-    if protocol != "http" && protocol != "https" {
-        return Err("protocol must be http or https".into());
+    let protocol = required("protocol")?.to_ascii_lowercase();
+    if protocol != "http" && protocol != "https" && protocol != "ws" && protocol != "wss" {
+        return Err("protocol must be http, https, ws or wss".into());
     }
     let host = required("host")?;
     let target_host = required("target_host")?;
 
     let path = get("path");
     let port = get("port").and_then(|v| v.parse::<u16>().ok());
-    let target_protocol = get("target_protocol");
+    let target_protocol = get("target_protocol").map(|v| v.to_ascii_lowercase());
     let target_port = get("target_port").and_then(|v| v.parse::<u16>().ok());
     let path_transform = get("path_transform");
     let target_path = get("target_path");
@@ -153,5 +153,12 @@ mod tests {
         assert_eq!(rule.target_host, "127.0.0.1");
         assert!(rule.path.is_none());
         assert!(rule.port.is_none());
+    }
+
+    #[test]
+    fn test_parse_rule_arg_websocket_protocol() {
+        let rule = parse_rule_arg("protocol=wss,host=example.com,target_host=127.0.0.1").unwrap();
+        assert_eq!(rule.protocol, "wss");
+        assert_eq!(rule.host, "example.com");
     }
 }
