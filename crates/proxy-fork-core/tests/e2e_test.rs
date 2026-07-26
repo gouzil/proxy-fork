@@ -17,6 +17,7 @@ use proxy_fork_core::{
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
+use tokio::sync::oneshot;
 use tokio::time::{Duration, timeout};
 
 async fn bind_or_skip(addr: &str, test_name: &str) -> Option<TcpListener> {
@@ -197,24 +198,37 @@ async fn test_end_to_end_websocket_proxy() {
         return;
     };
     let backend_addr = backend_listener.local_addr().unwrap();
+    let (host_tx, host_rx) = oneshot::channel::<Option<String>>();
+    let host_tx = Arc::new(std::sync::Mutex::new(Some(host_tx)));
 
     let backend_handle = tokio::spawn(async move {
         loop {
             let (stream, _) = backend_listener.accept().await.unwrap();
+            let host_tx = Arc::clone(&host_tx);
             tokio::spawn(async move {
                 let callback = |req: &WsRequest, mut response: WsResponse| {
-                    // Mirror first requested subprotocol to satisfy client-side validation.
-                    if let Some(requested) = req
+                    if let Some(tx) = host_tx.lock().unwrap().take() {
+                        let host = req
+                            .headers()
+                            .get("Host")
+                            .and_then(|v| v.to_str().ok())
+                            .map(ToString::to_string);
+                        let _ = tx.send(host);
+                    }
+
+                    let requested_protocols = req
                         .headers()
                         .get("Sec-WebSocket-Protocol")
                         .and_then(|v| v.to_str().ok())
-                        .and_then(|v| v.split(',').map(str::trim).find(|p| !p.is_empty()))
+                        .unwrap_or("");
+                    if requested_protocols
+                        .split(',')
+                        .map(str::trim)
+                        .any(|protocol| protocol == "graphql-ws")
                     {
-                        if let Ok(value) = requested.parse() {
-                            response
-                                .headers_mut()
-                                .insert("Sec-WebSocket-Protocol", value);
-                        }
+                        response
+                            .headers_mut()
+                            .insert("Sec-WebSocket-Protocol", "graphql-ws".parse().unwrap());
                     }
                     Ok(response)
                 };
@@ -328,7 +342,8 @@ async fn test_end_to_end_websocket_proxy() {
 
     // 2) Perform websocket handshake and verify message forwarding
     let ws_request = ClientRequestBuilder::new("ws://ws.example.com/ws".parse().unwrap())
-        .with_sub_protocol("auth-token");
+        .with_sub_protocol("graphql-transport-ws")
+        .with_sub_protocol("graphql-ws");
 
     let (mut websocket, ws_response) =
         timeout(Duration::from_secs(5), client_async(ws_request, tunnel))
@@ -341,7 +356,16 @@ async fn test_end_to_end_websocket_proxy() {
             .headers()
             .get("Sec-WebSocket-Protocol")
             .and_then(|v| v.to_str().ok()),
-        Some("auth-token")
+        Some("graphql-ws")
+    );
+
+    let upstream_host = timeout(Duration::from_secs(5), host_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        upstream_host.as_deref(),
+        Some(format!("{}:{}", backend_addr.ip(), backend_addr.port()).as_str())
     );
 
     timeout(

@@ -153,12 +153,6 @@ pub fn upgrade<B>(
     config: Option<WebSocketConfig>,
 ) -> Result<(Response<Full<Bytes>>, HyperWebsocket), ProtocolError> {
     let request = request.borrow_mut();
-    let requested_subprotocol = request
-        .headers()
-        .get("Sec-WebSocket-Protocol")
-        .and_then(|v| v.to_str().ok())
-        .and_then(first_subprotocol);
-
     let key = request
         .headers()
         .get("Sec-WebSocket-Key")
@@ -172,7 +166,7 @@ pub fn upgrade<B>(
         return Err(ProtocolError::MissingSecWebSocketVersionHeader);
     }
 
-    let mut response = Response::builder()
+    let response = Response::builder()
         .status(hyper::StatusCode::SWITCHING_PROTOCOLS)
         .header(hyper::header::CONNECTION, "upgrade")
         .header(hyper::header::UPGRADE, "websocket")
@@ -180,27 +174,12 @@ pub fn upgrade<B>(
         .body(Full::<Bytes>::from("switching to websocket protocol"))
         .expect("bug: failed to build response");
 
-    if let Some(protocol) = requested_subprotocol {
-        if let Ok(value) = hyper::header::HeaderValue::from_str(protocol) {
-            response
-                .headers_mut()
-                .insert("Sec-WebSocket-Protocol", value);
-        }
-    }
-
     let stream = HyperWebsocket {
         inner: hyper::upgrade::on(request),
         config,
     };
 
     Ok((response, stream))
-}
-
-fn first_subprotocol(header: &str) -> Option<&str> {
-    header
-        .split(',')
-        .map(str::trim)
-        .find(|value| !value.is_empty())
 }
 
 /// Check if a request is a websocket upgrade request.

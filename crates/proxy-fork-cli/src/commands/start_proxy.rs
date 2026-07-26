@@ -66,11 +66,10 @@ fn rule_item_to_runtime(r: &RuleItem) -> Option<(AddressPattern, Address)> {
     let protocol = parse_rule_protocol(&r.protocol)?;
     let pattern = AddressPattern::new(protocol, &r.host, r.port, r.path.as_deref()).ok()?;
 
-    let target_protocol = r
-        .target_protocol
-        .as_deref()
-        .and_then(parse_rule_protocol)
-        .unwrap_or(Protocol::Http);
+    let target_protocol = match r.target_protocol.as_deref() {
+        Some(protocol) => parse_rule_protocol(protocol)?,
+        None => Protocol::Http,
+    };
 
     let mut builder = AddressBuilder::default()
         .protocol(target_protocol)
@@ -95,9 +94,35 @@ fn rule_item_to_runtime(r: &RuleItem) -> Option<(AddressPattern, Address)> {
 
 fn parse_rule_protocol(protocol: &str) -> Option<Protocol> {
     match protocol.trim().to_ascii_lowercase().as_str() {
-        "http" | "ws" => Some(Protocol::Http),
-        "https" | "wss" => Some(Protocol::Https),
+        "http" => Some(Protocol::Http),
+        "https" => Some(Protocol::Https),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rule_item_to_runtime;
+    use crate::args::RuleItem;
+
+    #[test]
+    fn rule_item_rejects_websocket_protocols() {
+        let mut rule = RuleItem {
+            protocol: "https".into(),
+            host: "example.com".into(),
+            path: None,
+            port: None,
+            target_protocol: Some("ws".into()),
+            target_host: "127.0.0.1".into(),
+            target_port: None,
+            path_transform: None,
+            target_path: None,
+        };
+        assert!(rule_item_to_runtime(&rule).is_none());
+
+        rule.protocol = "wss".into();
+        rule.target_protocol = Some("http".into());
+        assert!(rule_item_to_runtime(&rule).is_none());
     }
 }
 

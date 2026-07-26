@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use derive_builder::Builder;
+use http::header::HeaderValue;
 use http::header::{CONNECTION, HOST, ORIGIN, UPGRADE};
 use http::{Request, Uri};
 use hudsucker::{
@@ -59,6 +60,14 @@ impl ProxyHandler {
             .is_some()
     }
 
+    fn rewrite_websocket_host(req: &mut Request<Body>) {
+        if let Some(authority) = req.uri().authority() {
+            if let Ok(value) = HeaderValue::from_str(authority.as_str()) {
+                req.headers_mut().insert(HOST, value);
+            }
+        }
+    }
+
     async fn rewrite_request_uri(&self, uri: &Uri) -> Option<Uri> {
         let manager = self.proxy_manager.read().await;
         let match_result = manager.find_target_with_match_info(uri).await?;
@@ -115,6 +124,9 @@ impl HttpHandler for ProxyHandler {
                 );
             }
             *req.uri_mut() = new_uri;
+            if is_ws_upgrade {
+                Self::rewrite_websocket_host(&mut req);
+            }
         }
 
         req.into()

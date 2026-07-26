@@ -64,18 +64,17 @@ proxy-fork-cli
 
 ## 开发
 
-### WebSocket 子协议补丁说明
+### WebSocket 代理补丁说明
 
-项目在 `Cargo.toml` 中通过 `[patch.crates-io]` 引入了本地 `crates/hyper-tungstenite` 补丁版本。
+项目在 `Cargo.toml` 中通过 `[patch.crates-io]` 引入了本地 `crates/hyper-tungstenite` 和 `crates/hudsucker` 补丁版本。
 
-这样做的原因是：上游 `hyper-tungstenite` 在 WebSocket 握手时，默认不会在 `101 Switching Protocols` 响应里回写 `Sec-WebSocket-Protocol`。  
-当浏览器或前端 SDK 在握手请求里携带了该头（例如把 token/JWT 作为子协议）时，客户端会严格校验响应头，缺失会导致握手失败或立即断开。
+这样做的原因是：WebSocket 代理需要等上游握手完成后，才能知道实际协商出的 `Sec-WebSocket-Protocol`。代理不能直接回显客户端请求里的第一个子协议，否则客户端和上游可能看到不同的协议选择。
 
-当前补丁仅做了最小改动：
+当前补丁保持最小范围：
 
-- 如果请求带有 `Sec-WebSocket-Protocol`，响应回写第一个协议值
-- 如果请求未携带该头，行为与上游保持一致
-- 不改变现有代理流程和其他 HTTP/WebSocket 行为
+- `hudsucker` 会先连接上游 WebSocket，再把上游实际返回的 `Sec-WebSocket-Protocol` 同步到给客户端的 `101 Switching Protocols` 响应
+- WebSocket 规则改写 URI 后会同步更新上游握手请求的 `Host` 头
+- `hyper-tungstenite` 不再自动选择或回显子协议，调用方需要明确设置响应头
 
 后续维护建议：
 
