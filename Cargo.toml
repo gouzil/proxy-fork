@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/*"]
-exclude = ["crates/hyper-tungstenite", "crates/hudsucker"]
+exclude = ["crates/hudsucker"]
 resolver = "2"
 
 [workspace.package]
@@ -84,5 +84,4 @@ opt-level = "z"
 strip = true
 
 [patch.crates-io]
-hyper-tungstenite = { path = "crates/hyper-tungstenite" }
 hudsucker = { path = "crates/hudsucker" }

@@ -66,7 +66,7 @@ proxy-fork-cli
 
 ### WebSocket 代理补丁说明
 
-项目在 `Cargo.toml` 中通过 `[patch.crates-io]` 引入了本地 `crates/hyper-tungstenite` 和 `crates/hudsucker` 补丁版本。
+项目在 `Cargo.toml` 中通过 `[patch.crates-io]` 引入本地 `crates/hudsucker` 补丁版本。
 
 这样做的原因是：WebSocket 代理需要等上游握手完成后，才能知道实际协商出的 `Sec-WebSocket-Protocol`。代理不能直接回显客户端请求里的第一个子协议，否则客户端和上游可能看到不同的协议选择。
 
@@ -74,11 +74,10 @@ proxy-fork-cli
 
 - `hudsucker` 会先连接上游 WebSocket，再把上游实际返回的 `Sec-WebSocket-Protocol` 同步到给客户端的 `101 Switching Protocols` 响应
 - WebSocket 规则改写 URI 后会同步更新上游握手请求的 `Host` 头
-- `hyper-tungstenite` 不再自动选择或回显子协议，调用方需要明确设置响应头
 
 后续维护建议：
 
-- 如果上游发布了等价修复，优先回到官方版本并移除本地 patch
+- 如果 Hudsucker 上游发布等价修复，优先回到官方版本并移除本地 patch
 - 升级依赖后请重点回归测试：`wss` 握手、子协议协商、消息收发稳定性
 
 ### 项目结构
