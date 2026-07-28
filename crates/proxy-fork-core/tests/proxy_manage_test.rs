@@ -468,4 +468,103 @@ mod proxy_manager_test {
         let static_result = manager.find_target(&static_uri).await;
         assert!(static_result.is_none());
     }
+
+    #[tokio::test]
+    async fn test_proxy_manager_websocket_scheme_compat() {
+        let mut manager =
+            ProxyManager::from_config(ProxyManager::builder().cache_size(1000).build().unwrap())
+                .expect("Failed to construct ProxyManager from config");
+
+        let ws_pattern =
+            AddressPattern::new(Protocol::Http, "ws.example.com", None, Some("/socket/*")).unwrap();
+        let ws_target = Address {
+            protocol: Protocol::Http,
+            host: "localhost".to_string(),
+            port: Some(5002),
+            path: None,
+            path_transform_mode: PathTransformMode::default(),
+        };
+        manager.add_rule(ws_pattern, ws_target).await;
+
+        let wss_pattern = AddressPattern::new(
+            Protocol::Https,
+            "secure.example.com",
+            None,
+            Some("/socket/*"),
+        )
+        .unwrap();
+        let wss_target = Address {
+            protocol: Protocol::Http,
+            host: "localhost".to_string(),
+            port: Some(5003),
+            path: None,
+            path_transform_mode: PathTransformMode::default(),
+        };
+        manager.add_rule(wss_pattern, wss_target).await;
+
+        let ws_uri: Uri = "ws://ws.example.com/socket/room-1".parse().unwrap();
+        let ws_result = manager.find_target(&ws_uri).await.unwrap();
+        assert_eq!(ws_result.port, Some(5002));
+
+        let wss_uri: Uri = "wss://secure.example.com/socket/room-2".parse().unwrap();
+        let wss_result = manager.find_target(&wss_uri).await.unwrap();
+        assert_eq!(wss_result.port, Some(5003));
+    }
+
+    #[tokio::test]
+    async fn test_exact_rule_without_port_matches_explicit_default_https_port() {
+        let mut manager =
+            ProxyManager::from_config(ProxyManager::builder().cache_size(1000).build().unwrap())
+                .expect("Failed to construct ProxyManager from config");
+
+        let pattern =
+            AddressPattern::new(Protocol::Https, "echo.websocket.org", None, Some("/")).unwrap();
+        let target = Address {
+            protocol: Protocol::Http,
+            host: "localhost".to_string(),
+            port: Some(8000),
+            path: None,
+            path_transform_mode: PathTransformMode::default(),
+        };
+        manager.add_rule(pattern, target).await;
+
+        let uri_without_port: Uri = "https://echo.websocket.org/".parse().unwrap();
+        let result_without_port = manager.find_target(&uri_without_port).await.unwrap();
+        assert_eq!(result_without_port.port, Some(8000));
+
+        let uri_with_default_port: Uri = "https://echo.websocket.org:443/".parse().unwrap();
+        let result_with_default_port = manager.find_target(&uri_with_default_port).await.unwrap();
+        assert_eq!(result_with_default_port.port, Some(8000));
+    }
+
+    #[tokio::test]
+    async fn test_exact_rule_with_explicit_default_port_matches_omitted_port() {
+        let mut manager =
+            ProxyManager::from_config(ProxyManager::builder().cache_size(1000).build().unwrap())
+                .expect("Failed to construct ProxyManager from config");
+
+        let pattern = AddressPattern::new(
+            Protocol::Https,
+            "secure.example.com",
+            Some(443),
+            Some("/socket"),
+        )
+        .unwrap();
+        let target = Address {
+            protocol: Protocol::Http,
+            host: "localhost".to_string(),
+            port: Some(9000),
+            path: None,
+            path_transform_mode: PathTransformMode::default(),
+        };
+        manager.add_rule(pattern, target).await;
+
+        let uri_without_port: Uri = "https://secure.example.com/socket".parse().unwrap();
+        let result_without_port = manager.find_target(&uri_without_port).await.unwrap();
+        assert_eq!(result_without_port.port, Some(9000));
+
+        let uri_with_default_port: Uri = "https://secure.example.com:443/socket".parse().unwrap();
+        let result_with_default_port = manager.find_target(&uri_with_default_port).await.unwrap();
+        assert_eq!(result_with_default_port.port, Some(9000));
+    }
 }

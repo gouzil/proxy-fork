@@ -16,9 +16,6 @@ pub use proxy_manage::*;
 pub mod proxy_handler;
 pub use proxy_handler::*;
 
-pub mod utils;
-pub use utils::*;
-
 // Re-export hudsucker and tokio-rustls for easier access
 pub use hudsucker::Proxy;
 pub use tokio_rustls::rustls;

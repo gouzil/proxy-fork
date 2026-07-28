@@ -63,17 +63,12 @@ async fn shutdown_signal(sysproxy: Option<Arc<Mutex<Sysproxy>>>) {
 }
 
 fn rule_item_to_runtime(r: &RuleItem) -> Option<(AddressPattern, Address)> {
-    let protocol = match r.protocol.as_str() {
-        "http" => Protocol::Http,
-        "https" => Protocol::Https,
-        _ => return None,
-    };
+    let protocol = parse_rule_protocol(&r.protocol)?;
     let pattern = AddressPattern::new(protocol, &r.host, r.port, r.path.as_deref()).ok()?;
 
-    let target_protocol = match r.target_protocol.as_deref().unwrap_or("http") {
-        "http" => Protocol::Http,
-        "https" => Protocol::Https,
-        _ => Protocol::Http,
+    let target_protocol = match r.target_protocol.as_deref() {
+        Some(protocol) => parse_rule_protocol(protocol)?,
+        None => Protocol::Http,
     };
 
     let mut builder = AddressBuilder::default()
@@ -95,6 +90,40 @@ fn rule_item_to_runtime(r: &RuleItem) -> Option<(AddressPattern, Address)> {
     };
 
     Some((pattern, builder.build().ok()?))
+}
+
+fn parse_rule_protocol(protocol: &str) -> Option<Protocol> {
+    match protocol.trim().to_ascii_lowercase().as_str() {
+        "http" => Some(Protocol::Http),
+        "https" => Some(Protocol::Https),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rule_item_to_runtime;
+    use crate::args::RuleItem;
+
+    #[test]
+    fn rule_item_rejects_websocket_protocols() {
+        let mut rule = RuleItem {
+            protocol: "https".into(),
+            host: "example.com".into(),
+            path: None,
+            port: None,
+            target_protocol: Some("ws".into()),
+            target_host: "127.0.0.1".into(),
+            target_port: None,
+            path_transform: None,
+            target_path: None,
+        };
+        assert!(rule_item_to_runtime(&rule).is_none());
+
+        rule.protocol = "wss".into();
+        rule.target_protocol = Some("http".into());
+        assert!(rule_item_to_runtime(&rule).is_none());
+    }
 }
 
 pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
@@ -189,7 +218,7 @@ pub(crate) async fn start_proxy(cfg: &AppConfig) -> anyhow::Result<()> {
         .with_ca(ca)
         .with_rustls_connector(aws_lc_rs::default_provider())
         .with_http_handler(proxy_handler.clone())
-        // .with_websocket_handler(proxy_handler.clone())
+        .with_websocket_handler(proxy_handler.clone())
         .with_graceful_shutdown(shutdown_signal(sysproxy.clone()))
         .build()
         .expect("Failed to create proxy");

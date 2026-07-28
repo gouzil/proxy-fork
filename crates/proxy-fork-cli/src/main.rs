@@ -9,9 +9,9 @@ async fn main() {
     let args = CliArgs::parse();
     // 设置日志级别
     let level = match args.global.debug {
-        0 => "proxy_fork_cli=info,proxy_fork_core=info",
-        1 => "proxy_fork_cli=debug,proxy_fork_core=debug",
-        _ => "proxy_fork_cli=trace,proxy_fork_core=trace",
+        0 => "proxy_fork_cli=info,proxy_fork_core=info,hudsucker=warn",
+        1 => "proxy_fork_cli=debug,proxy_fork_core=debug,hudsucker=debug",
+        _ => "proxy_fork_cli=trace,proxy_fork_core=trace,hudsucker=trace",
     };
 
     // 创建过滤器，只显示 proxy-fork 相关的日志

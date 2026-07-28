@@ -10,10 +10,15 @@
 # 运行所有基准测试
 cargo bench --package proxy-fork-core --bench proxy_manager_bench
 
+# 运行原始请求 vs Proxy-Fork 代理对比测试
+cargo bench --package proxy-fork-core --bench proxy_manager_compare_bench
+
 # 运行特定测试组
 cargo bench --package proxy-fork-core --bench proxy_manager_bench -- exact_match
 cargo bench --package proxy-fork-core --bench proxy_manager_bench -- pattern_match
 cargo bench --package proxy-fork-core --bench proxy_manager_bench -- cache_hit
+cargo bench --package proxy-fork-core --bench proxy_manager_compare_bench -- transport_http_roundtrip
+cargo bench --package proxy-fork-core --bench proxy_manager_compare_bench -- transport_ws_message_roundtrip
 ```
 
 ### 使用 CodSpeed 进行性能追踪
@@ -131,6 +136,27 @@ add_rule/add_pattern_rule  time:   [138.07 ns]
 ```
 large_ruleset/500exact_100pattern   time:   [176.00 ns]
 large_ruleset/2000exact_500pattern  time:   [169.91 ns]  # 更多规则反而略快！
+```
+
+### 7. 原始请求 vs 走 Proxy-Fork (`proxy_manager_compare_bench`)
+
+用于对比“直连原始 HTTP / WebSocket”与“通过 proxy-fork 代理后”的端到端开销：
+
+- `transport_http_roundtrip`:
+  - `direct_http`: 客户端直接请求后端 HTTP 服务
+  - `proxy_fork_http`: 客户端通过 proxy-fork 请求同一个后端服务
+- `transport_ws_message_roundtrip`:
+  - `direct_ws_message`: 直连 WebSocket 单条消息往返
+  - `proxy_fork_ws_message`: 通过 proxy-fork 的 WebSocket 单条消息往返
+
+示例（本地一次实测）：
+
+```
+transport_http_roundtrip/direct_http      time: [45.648 µs 45.877 µs 46.126 µs]
+transport_http_roundtrip/proxy_fork_http  time: [79.979 µs 80.659 µs 81.369 µs]
+
+transport_ws_message_roundtrip/direct_ws_message      time: [27.570 µs 27.883 µs 28.214 µs]
+transport_ws_message_roundtrip/proxy_fork_ws_message  time: [57.949 µs 58.401 µs 58.861 µs]
 ```
 
 ## 性能分析

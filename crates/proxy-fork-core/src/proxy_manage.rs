@@ -42,13 +42,29 @@ pub struct ExactKey {
 }
 
 impl ExactKey {
-    fn from_address(addr: &Address) -> Self {
-        Self {
-            protocol: addr.protocol,
-            host: addr.host.clone(),
-            port: addr.port,
-            path: addr.path.clone(),
+    fn normalize_port(protocol: Protocol, port: Option<u16>) -> Option<u16> {
+        match (protocol, port) {
+            (Protocol::Http, Some(80)) | (Protocol::Https, Some(443)) => None,
+            _ => port,
         }
+    }
+
+    fn new(protocol: Protocol, host: String, port: Option<u16>, path: Option<String>) -> Self {
+        Self {
+            protocol,
+            host,
+            port: Self::normalize_port(protocol, port),
+            path,
+        }
+    }
+
+    fn from_address(addr: &Address) -> Self {
+        Self::new(
+            addr.protocol,
+            addr.host.clone(),
+            addr.port,
+            addr.path.clone(),
+        )
     }
 }
 
@@ -100,8 +116,7 @@ pub struct ProxyManagerConfig {
 impl ProxyManager {
     /// 使用 `ProxyManagerConfig` 构造
     pub fn from_config(cfg: ProxyManagerConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let cache_size =
-            NonZeroUsize::new(cfg.cache_size).ok_or_else(|| "cache_size must be non-zero")?;
+        let cache_size = NonZeroUsize::new(cfg.cache_size).ok_or("cache_size must be non-zero")?;
 
         Ok(Self {
             exact_rules: cfg.exact_rules,
@@ -211,12 +226,7 @@ impl ProxyManager {
                     }
                 });
 
-                let key = ExactKey {
-                    protocol: pattern.protocol,
-                    host: host.clone(),
-                    port: pattern.port,
-                    path,
-                };
+                let key = ExactKey::new(pattern.protocol, host.clone(), pattern.port, path);
 
                 self.exact_rules.insert(key, target);
                 return;

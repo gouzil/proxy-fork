@@ -114,7 +114,7 @@ pub(crate) fn parse_rule_arg(s: &str) -> Result<RuleItem, String> {
     let get = |k: &str| map.get(k).cloned();
     let required = |k: &str| get(k).ok_or_else(|| format!("missing required key: {}", k));
 
-    let protocol = required("protocol")?;
+    let protocol = required("protocol")?.to_ascii_lowercase();
     if protocol != "http" && protocol != "https" {
         return Err("protocol must be http or https".into());
     }
@@ -123,7 +123,10 @@ pub(crate) fn parse_rule_arg(s: &str) -> Result<RuleItem, String> {
 
     let path = get("path");
     let port = get("port").and_then(|v| v.parse::<u16>().ok());
-    let target_protocol = get("target_protocol");
+    let target_protocol = get("target_protocol").map(|v| v.to_ascii_lowercase());
+    if !matches!(target_protocol.as_deref(), None | Some("http" | "https")) {
+        return Err("target_protocol must be http or https".into());
+    }
     let target_port = get("target_port").and_then(|v| v.parse::<u16>().ok());
     let path_transform = get("path_transform");
     let target_path = get("target_path");
@@ -153,5 +156,18 @@ mod tests {
         assert_eq!(rule.target_host, "127.0.0.1");
         assert!(rule.path.is_none());
         assert!(rule.port.is_none());
+    }
+
+    #[test]
+    fn test_parse_rule_arg_rejects_websocket_protocols() {
+        for protocol in ["ws", "wss"] {
+            let rule = format!("protocol={protocol},host=example.com,target_host=127.0.0.1");
+            assert!(parse_rule_arg(&rule).is_err());
+
+            let rule = format!(
+                "protocol=https,host=example.com,target_host=127.0.0.1,target_protocol={protocol}"
+            );
+            assert!(parse_rule_arg(&rule).is_err());
+        }
     }
 }

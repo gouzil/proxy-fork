@@ -204,6 +204,23 @@ mod address_pattern_test {
     }
 
     #[test]
+    fn test_address_from_websocket_uri() {
+        let ws_uri: Uri = "ws://example.com/socket?room=1".parse().unwrap();
+        let ws_address = Address::from_uri(&ws_uri).unwrap();
+        assert_eq!(ws_address.protocol, Protocol::Http);
+        assert_eq!(ws_address.host, "example.com");
+        assert_eq!(ws_address.port, None);
+        assert_eq!(ws_address.path, Some("/socket?room=1".to_string()));
+
+        let wss_uri: Uri = "wss://example.com/socket".parse().unwrap();
+        let wss_address = Address::from_uri(&wss_uri).unwrap();
+        assert_eq!(wss_address.protocol, Protocol::Https);
+        assert_eq!(wss_address.host, "example.com");
+        assert_eq!(wss_address.port, None);
+        assert_eq!(wss_address.path, Some("/socket".to_string()));
+    }
+
+    #[test]
     fn test_address_path_rewrite_modes() {
         use proxy_fork_core::PathTransformMode;
 

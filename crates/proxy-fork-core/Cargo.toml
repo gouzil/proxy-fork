@@ -31,3 +31,7 @@ reqwest = { workspace = true, features = ["json"] }
 [[bench]]
 name = "proxy_manager_bench"
 harness = false
+
+[[bench]]
+name = "proxy_manager_compare_bench"
+harness = false
