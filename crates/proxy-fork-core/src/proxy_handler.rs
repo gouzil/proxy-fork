@@ -61,10 +61,10 @@ impl ProxyHandler {
     }
 
     fn rewrite_websocket_host(req: &mut Request<Body>) {
-        if let Some(authority) = req.uri().authority() {
-            if let Ok(value) = HeaderValue::from_str(authority.as_str()) {
-                req.headers_mut().insert(HOST, value);
-            }
+        if let Some(authority) = req.uri().authority()
+            && let Ok(value) = HeaderValue::from_str(authority.as_str())
+        {
+            req.headers_mut().insert(HOST, value);
         }
     }
 

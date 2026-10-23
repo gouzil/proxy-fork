@@ -21,7 +21,7 @@ pub async fn run(CliArgs { command, global }: CliArgs) -> Result<()> {
 
 async fn start_proxy(start_args: &StartProxyArgs, global: &GlobalConfigArgs) -> Result<()> {
     // 加载配置：CLI > CWD > 用户目录
-    let cfg = load_start_proxy_config(&global, start_args)?;
+    let cfg = load_start_proxy_config(global, start_args)?;
     // 启动代理服务
     commands::start_proxy::start_proxy(&cfg).await
 }

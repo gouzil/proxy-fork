@@ -229,6 +229,7 @@ impl ProxyManager {
                 let key = ExactKey::new(pattern.protocol, host.clone(), pattern.port, path);
 
                 self.exact_rules.insert(key, target);
+                self.cache.lock().await.clear();
                 return;
             }
         }
@@ -279,12 +280,11 @@ impl ProxyManager {
         let address = Address::from_uri(uri).ok()?;
 
         // 1. 先查精确索引 (O(1))
-        let key = ExactKey::from_address(&address);
-        if let Some(target) = self.exact_rules.get(&key) {
+        if let Some((target, matched_path)) = self.exact_match(&address) {
             self.stats.inc_exact();
             return Some(MatchResult {
                 target: target.clone(),
-                matched_path_prefix: key.path.clone(),
+                matched_path_prefix: matched_path,
             });
         }
 
@@ -325,8 +325,7 @@ impl ProxyManager {
     /// 内部查找方法（更新统计）
     async fn find_target_for_address_uncached(&self, address: &Address) -> Option<Address> {
         // 1. 先查精确索引 (O(1))
-        let key = ExactKey::from_address(address);
-        if let Some(target) = self.exact_rules.get(&key) {
+        if let Some((target, _)) = self.exact_match(address) {
             self.stats.inc_exact();
             return Some(target.clone());
         }
@@ -339,6 +338,24 @@ impl ProxyManager {
             }
         }
         self.stats.inc_miss();
+        None
+    }
+
+    fn exact_match(&self, address: &Address) -> Option<(&Address, Option<String>)> {
+        let mut key = ExactKey::from_address(address);
+        let port = key.port;
+        // Unspecified rule paths and ports are unconstrained, not literal missing URI fields.
+        for any_path in [false, true] {
+            if any_path {
+                key.path = None;
+            }
+            for any_port in [false, true] {
+                key.port = if any_port { None } else { port };
+                if let Some(target) = self.exact_rules.get(&key) {
+                    return Some((target, key.path));
+                }
+            }
+        }
         None
     }
 

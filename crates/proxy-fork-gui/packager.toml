@@ -1,0 +1,15 @@
+name = "proxy-fork-gui"
+productName = "Proxy Fork"
+version = "0.1.0"
+identifier = "io.github.gouzil.proxy-fork"
+description = "HTTP(S) proxy configuration and control"
+formats = ["app"]
+icons = ["../../target/gui-icon.png"]
+resources = [{ src = "assets/fonts/OFL.txt", target = "licenses/NotoSansSC-OFL.txt" }]
+
+[[binaries]]
+path = "proxy-fork-gui"
+main = true
+
+[macos]
+minimumSystemVersion = "11.0"

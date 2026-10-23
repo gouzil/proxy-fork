@@ -5,6 +5,12 @@ version.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+serde.workspace = true
+toml.workspace = true
+tempfile.workspace = true
+sysproxy.workspace = true
+tokio-util.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
 http.workspace = true
@@ -18,6 +24,12 @@ tracing.workspace = true
 fs-err.workspace = true
 regex.workspace = true
 lru.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "=0.9.4"
+system-configuration = "=0.6.1"
+security-framework-sys = "=2.14.0"
+plist = "=1.10.0"
 
 [features]
 proxy_manage_stats = []

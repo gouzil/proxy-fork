@@ -206,6 +206,8 @@ async fn test_end_to_end_websocket_proxy() {
             let (stream, _) = backend_listener.accept().await.unwrap();
             let host_tx = Arc::clone(&host_tx);
             tokio::spawn(async move {
+                #[allow(clippy::result_large_err)]
+                // tungstenite's callback requires this concrete response type.
                 let callback = |req: &WsRequest, mut response: WsResponse| {
                     if let Some(tx) = host_tx.lock().unwrap().take() {
                         let host = req

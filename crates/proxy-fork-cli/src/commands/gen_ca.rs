@@ -1,6 +1,5 @@
 use anyhow::Result;
-use fs_err as fs;
-use proxy_fork_core::certification::{SelfSignedCa, SelfSignedCaBuilder};
+use proxy_fork_core::certification::generate_ca;
 use std::io::{self, BufRead, Write};
 use tracing::info;
 
@@ -26,25 +25,14 @@ fn confirm_overwrite<R: BufRead>(reader: &mut R, path: &std::path::Path) -> Resu
 }
 
 pub(crate) async fn gen_ca(args: &GenCaArgs) -> Result<()> {
-    // 使用默认配置生成自签名 CA
-    let ca_config = SelfSignedCaBuilder::default().build()?;
-    let self_signed_ca = SelfSignedCa::gen_signed_cert(&ca_config)
-        .expect("Failed to generate self-signed CA certificate");
-
-    // 获取证书和私钥的 PEM 字节
-    let cert_pem = self_signed_ca.certificate.pem();
-    let key_pem = self_signed_ca.issuer.key().serialize_pem();
-
     // 确定输出路径
     let cert_path = args
         .ca_cert
-        .as_ref()
-        .map(|p| p.clone())
+        .clone()
         .unwrap_or_else(|| default_cert_path().unwrap());
     let key_path = args
         .ca_key
-        .as_ref()
-        .map(|p| p.clone())
+        .clone()
         .unwrap_or_else(|| default_private_key_path().unwrap());
 
     // 如果使用默认路径且文件已存在，确认覆盖
@@ -60,17 +48,7 @@ pub(crate) async fn gen_ca(args: &GenCaArgs) -> Result<()> {
         }
     }
 
-    // 确保目录存在
-    if let Some(parent) = cert_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    if let Some(parent) = key_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // 写入文件
-    fs::write(&cert_path, &cert_pem)?;
-    fs::write(&key_path, &key_pem)?;
+    generate_ca(&cert_path, &key_path, true)?;
 
     info!(
         "CA certificate generated and saved to: {}",
@@ -102,7 +80,7 @@ mod tests {
     fn test_confirm_overwrite_yes() {
         let temp_dir = tempdir().unwrap();
         let existing_file = temp_dir.path().join("existing.txt");
-        std::fs::write(&existing_file, "test").unwrap();
+        fs_err::write(&existing_file, "test").unwrap();
 
         let mut input = Cursor::new(b"y\n");
         let result = confirm_overwrite(&mut input, &existing_file);
@@ -113,7 +91,7 @@ mod tests {
     fn test_confirm_overwrite_yes_uppercase() {
         let temp_dir = tempdir().unwrap();
         let existing_file = temp_dir.path().join("existing.txt");
-        std::fs::write(&existing_file, "test").unwrap();
+        fs_err::write(&existing_file, "test").unwrap();
 
         let mut input = Cursor::new(b"YES\n");
         let result = confirm_overwrite(&mut input, &existing_file);
@@ -124,7 +102,7 @@ mod tests {
     fn test_confirm_overwrite_no() {
         let temp_dir = tempdir().unwrap();
         let existing_file = temp_dir.path().join("existing.txt");
-        std::fs::write(&existing_file, "test").unwrap();
+        fs_err::write(&existing_file, "test").unwrap();
 
         let mut input = Cursor::new(b"n\n");
         let result = confirm_overwrite(&mut input, &existing_file);
@@ -135,7 +113,7 @@ mod tests {
     fn test_confirm_overwrite_default_no() {
         let temp_dir = tempdir().unwrap();
         let existing_file = temp_dir.path().join("existing.txt");
-        std::fs::write(&existing_file, "test").unwrap();
+        fs_err::write(&existing_file, "test").unwrap();
 
         let mut input = Cursor::new(b"something else\n");
         let result = confirm_overwrite(&mut input, &existing_file);
@@ -171,8 +149,8 @@ mod tests {
         assert!(key_path.exists(), "Private key file should exist");
 
         // 验证文件内容
-        let cert_content = std::fs::read_to_string(&cert_path).unwrap();
-        let key_content = std::fs::read_to_string(&key_path).unwrap();
+        let cert_content = fs_err::read_to_string(&cert_path).unwrap();
+        let key_content = fs_err::read_to_string(&key_path).unwrap();
 
         // 检查是否是 PEM 格式
         assert!(cert_content.contains("-----BEGIN CERTIFICATE-----"));

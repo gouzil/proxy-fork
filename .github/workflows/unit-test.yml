@@ -33,6 +33,10 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y pkg-config clang libxkbcommon-dev libwayland-dev
+
       - name: Workspace tests (default features)
         run: cargo test --workspace
 
