@@ -12,6 +12,14 @@
     "en": "Proxy Fork",
     "zh-CN": "Proxy Fork"
   },
+  "tray.dashboard": {
+    "en": "Dashboard",
+    "zh-CN": "仪表板"
+  },
+  "tray.system_proxy": {
+    "en": "System proxy",
+    "zh-CN": "系统代理"
+  },
   "nav.dashboard": {
     "en": "Overview",
     "zh-CN": "概览"
