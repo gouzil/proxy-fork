@@ -179,6 +179,17 @@ impl App {
             paused_logs: None,
         }
     }
+    pub fn show_dashboard(&mut self) {
+        self.page = Page::Dashboard;
+    }
+    pub fn toggle_system_proxy(&mut self) -> bool {
+        if self.busy {
+            return false;
+        }
+        self.config.enable_sysproxy = !self.config.enable_sysproxy;
+        self.request_config_save();
+        true
+    }
     pub fn set_locale(&mut self, locale: &str) {
         if matches!(locale, "en" | "zh-CN") {
             self.preferences.locale = locale.into();

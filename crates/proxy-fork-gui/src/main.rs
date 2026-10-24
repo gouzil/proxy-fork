@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use proxy_fork_core::{app_config::FileConfig, dirs, proxy_service::ProxyService};
 use proxy_fork_gui::{
-    app::{Action, App, Page},
+    app::{Action, App},
     event::{AppEvent, Outcome},
     logging::{GuiLayer, LogBuffer},
     platform,
@@ -641,13 +641,11 @@ impl ApplicationHandler<AppEvent> for Desktop {
             }
             AppEvent::Show => self.show(),
             AppEvent::ShowDashboard => {
-                self.app.page = Page::Dashboard;
+                self.app.show_dashboard();
                 self.show();
             }
             AppEvent::ToggleSystemProxy => {
-                if !self.app.busy {
-                    self.app.config.enable_sysproxy = !self.app.config.enable_sysproxy;
-                    self.app.request_config_save();
+                if self.app.toggle_system_proxy() {
                     if let Some(action) = self.app.queued_action() {
                         self.action(action);
                     }

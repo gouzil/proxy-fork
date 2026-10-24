@@ -1,8 +1,34 @@
 use proxy_fork_core::app_config::{AppConfig, RuleItem};
 use proxy_fork_gui::{
-    app::{Action, App},
+    app::{Action, App, Page},
     preferences::{Preferences, ThemePreference},
 };
+
+#[test]
+fn tray_dashboard_navigation_returns_to_dashboard() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.page = Page::Logs;
+    app.show_dashboard();
+    assert_eq!(app.page, Page::Dashboard);
+}
+
+#[test]
+fn tray_system_proxy_toggle_queues_a_config_save_when_idle() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    assert!(!app.config.enable_sysproxy);
+    assert!(app.toggle_system_proxy());
+    assert!(app.config.enable_sysproxy);
+    assert_eq!(app.queued_action(), Some(Action::Save));
+}
+
+#[test]
+fn tray_system_proxy_toggle_is_ignored_while_busy() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.begin(Action::Stop).unwrap();
+    assert!(!app.toggle_system_proxy());
+    assert!(!app.config.enable_sysproxy);
+    assert_eq!(app.queued_action(), None);
+}
 
 #[test]
 fn exit_flushes_overview_settings_without_a_save_button() {
