@@ -20,7 +20,18 @@ pub use unsupported::*;
 
 pub fn inspect_configured_ca(cert: &Path, is_default: bool) -> Result<Option<(String, bool)>> {
     match fs_err::metadata(cert) {
-        Err(error) if is_default && error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) if is_default && error.kind() == std::io::ErrorKind::NotFound => {
+            // Windows also reports NotFound when a path component is a file.
+            for parent in cert.ancestors().skip(1) {
+                match fs_err::metadata(parent) {
+                    Ok(metadata) if !metadata.is_dir() => return Err(error.into()),
+                    Ok(_) => break,
+                    Err(parent_error) if parent_error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(parent_error) => return Err(parent_error.into()),
+                }
+            }
+            Ok(None)
+        }
         Err(error) => Err(error.into()),
         Ok(_) => inspect_ca(cert).map(Some),
     }

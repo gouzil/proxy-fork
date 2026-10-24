@@ -15,14 +15,21 @@ fn only_a_missing_default_ca_is_not_configured() {
         inspect_configured_ca(&cert, false).is_err(),
         "a missing custom path is an error"
     );
+    let missing_parent = dir.path().join("missing").join("nested").join("ca.pem");
+    assert_eq!(inspect_configured_ca(&missing_parent, true).unwrap(), None);
+    assert!(
+        !missing_parent.parent().unwrap().exists(),
+        "inspection must not create directories"
+    );
     fs_err::write(&cert, "not a certificate").unwrap();
     assert!(inspect_configured_ca(&cert, true).is_err());
     assert!(inspect_configured_ca(&cert, false).is_err());
-    let invalid_parent = cert.join("ca.pem");
-    assert!(
-        inspect_configured_ca(&invalid_parent, true).is_err(),
-        "non-NotFound IO errors must not be hidden"
-    );
+    for invalid_parent in [cert.join("ca.pem"), cert.join("missing").join("ca.pem")] {
+        assert!(
+            inspect_configured_ca(&invalid_parent, true).is_err(),
+            "non-directory path components must not be hidden"
+        );
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
