@@ -462,7 +462,14 @@ impl ApplicationHandler<AppEvent> for Desktop {
                 #[cfg(target_os = "macos")]
                 {
                     match platform::Tray::new(self.proxy.clone()) {
-                        Ok(tray) => self.tray = Some(tray),
+                        Ok(tray) => {
+                            tray.update(
+                                self.app.running(),
+                                self.app.busy,
+                                self.app.config.enable_sysproxy,
+                            );
+                            self.tray = Some(tray);
+                        }
                         Err(error) => {
                             self.app.error = Some(format!("Tray initialization failed: {error}"));
                             self.background = false;
@@ -610,7 +617,11 @@ impl ApplicationHandler<AppEvent> for Desktop {
         }
         #[cfg(target_os = "macos")]
         if let Some(tray) = &self.tray {
-            tray.update(self.app.running(), self.app.busy);
+            tray.update(
+                self.app.running(),
+                self.app.busy,
+                self.app.config.enable_sysproxy,
+            );
         }
         let _ = event_loop;
     }
@@ -629,6 +640,18 @@ impl ApplicationHandler<AppEvent> for Desktop {
                 self.request_redraw();
             }
             AppEvent::Show => self.show(),
+            AppEvent::ShowDashboard => {
+                self.app.show_dashboard();
+                self.show();
+            }
+            AppEvent::ToggleSystemProxy => {
+                if self.app.toggle_system_proxy() {
+                    if let Some(action) = self.app.queued_action() {
+                        self.action(action);
+                    }
+                }
+                self.request_redraw();
+            }
             AppEvent::LogsReady => self.request_redraw(),
             AppEvent::DownloadProgress(done, total) => {
                 self.app.update_progress = (done, total);
@@ -637,7 +660,11 @@ impl ApplicationHandler<AppEvent> for Desktop {
         }
         #[cfg(target_os = "macos")]
         if let Some(tray) = &self.tray {
-            tray.update(self.app.running(), self.app.busy);
+            tray.update(
+                self.app.running(),
+                self.app.busy,
+                self.app.config.enable_sysproxy,
+            );
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {

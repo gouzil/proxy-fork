@@ -33,5 +33,7 @@ pub enum AppEvent {
     State(ProxyServiceState),
     LogsReady,
     Show,
+    ShowDashboard,
+    ToggleSystemProxy,
     DownloadProgress(u64, Option<u64>),
 }
