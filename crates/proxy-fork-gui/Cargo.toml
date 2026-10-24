@@ -1,0 +1,36 @@
+[package]
+name = "proxy-fork-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+proxy-fork-core.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+fs-err.workspace = true
+serde.workspace = true
+serde_json = "1.0"
+toml.workspace = true
+tempfile.workspace = true
+reqwest.workspace = true
+imgui = "=0.12.0"
+imgui-winit-support = "=0.13.0"
+imgui-wgpu = "=0.28.0"
+winit = "0.30"
+wgpu = "29"
+rust-i18n = "=4.2.1"
+sys-locale = "0.3"
+arboard = { version = "3.6", default-features = false }
+semver = "1.0"
+sha2 = "0.11"
+flate2 = "1.1"
+tar = "0.4"
+# A distributable .app must not depend on the developer's Homebrew dylibs.
+openssl = { version = "0.10.73", features = ["vendored"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tray-icon = "0.24.2"
+plist = "1.10"

@@ -134,10 +134,10 @@ async fn main() {
             println!("📋 当前所有规则 ({} 条):", all_rules.len());
             for (i, rule) in all_rules.iter().enumerate() {
                 println!(
-                    "  [{}] {:?}://{}:{}{} -> {}:{}",
+                    "  [{}] {:?}://{:?}:{}{} -> {}:{}",
                     i + 1,
                     rule.pattern.protocol,
-                    format!("{:?}", rule.pattern.pattern_type.host), // 简化输出
+                    rule.pattern.pattern_type.host,
                     rule.pattern.port.map_or("*".to_string(), |p| p.to_string()),
                     rule.pattern
                         .pattern_type

@@ -76,26 +76,7 @@ pub struct GenCaArgs {
     pub ca_key: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct RuleItem {
-    /// protocol: "http" | "https"
-    pub protocol: String,
-    /// 需要代理的域名（支持通配符或正则规则）
-    pub host: String,
-    /// 需要代理的路径（可选，支持通配符或正则规则）
-    pub path: Option<String>,
-    /// 可选端口
-    pub port: Option<u16>,
-
-    /// 目标地址
-    pub target_protocol: Option<String>,
-    pub target_host: String,
-    pub target_port: Option<u16>,
-    /// 路径重写模式：preserve|prepend|replace
-    pub path_transform: Option<String>,
-    /// 若为 prepend/replace，新的路径前缀
-    pub target_path: Option<String>,
-}
+pub use proxy_fork_core::app_config::RuleItem;
 
 pub(crate) fn parse_rule_arg(s: &str) -> Result<RuleItem, String> {
     // 解析 key=value, 用逗号分隔

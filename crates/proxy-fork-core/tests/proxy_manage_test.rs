@@ -8,6 +8,61 @@ mod proxy_manager_test {
     };
 
     #[tokio::test]
+    async fn pattern_rule_addition_invalidates_cached_misses() {
+        let mut manager =
+            ProxyManager::from_config(ProxyManager::builder().cache_size(10).build().unwrap())
+                .unwrap();
+        let uri: Uri = "http://api.example.com/resource".parse().unwrap();
+        assert!(manager.find_target(&uri).await.is_none());
+
+        let pattern = AddressPattern::new(Protocol::Http, "*.example.com", None, None).unwrap();
+        let target = Address {
+            protocol: Protocol::Http,
+            host: "pattern-backend".into(),
+            port: Some(3000),
+            path: None,
+            path_transform_mode: PathTransformMode::Preserve,
+        };
+        manager.add_rule(pattern, target).await;
+
+        assert_eq!(
+            manager.find_target(&uri).await.unwrap().host,
+            "pattern-backend"
+        );
+    }
+
+    #[tokio::test]
+    async fn host_only_rules_match_any_path_and_port_and_invalidate_cached_results() {
+        let mut manager =
+            ProxyManager::from_config(ProxyManager::builder().cache_size(10).build().unwrap())
+                .unwrap();
+        let uri: Uri = "http://example.com:8080/arbitrary?query=1".parse().unwrap();
+        assert!(manager.find_target(&uri).await.is_none());
+        let pattern = AddressPattern::new(Protocol::Http, "example.com", None, None).unwrap();
+        let mut target = Address {
+            protocol: Protocol::Http,
+            host: "first".into(),
+            port: Some(3000),
+            path: None,
+            path_transform_mode: PathTransformMode::Preserve,
+        };
+        manager.add_rule(pattern.clone(), target.clone()).await;
+        assert_eq!(manager.find_target(&uri).await.unwrap().host, "first");
+        assert_eq!(
+            manager
+                .find_target_with_match_info(&uri)
+                .await
+                .unwrap()
+                .target
+                .host,
+            "first"
+        );
+        target.host = "second".into();
+        manager.add_rule(pattern, target).await;
+        assert_eq!(manager.find_target(&uri).await.unwrap().host, "second");
+    }
+
+    #[tokio::test]
     async fn test_proxy_manager_basic() {
         let mut manager =
             ProxyManager::from_config(ProxyManager::builder().cache_size(1000).build().unwrap())

@@ -16,6 +16,105 @@ use time::{Duration, OffsetDateTime};
 use tracing::error;
 use x509_parser::prelude::parse_x509_certificate;
 
+#[derive(Debug, Clone)]
+pub struct GeneratedCa {
+    pub cert_path: std::path::PathBuf,
+    pub key_path: std::path::PathBuf,
+    pub fingerprint: String,
+}
+
+pub fn certificate_fingerprint(path: &std::path::Path) -> anyhow::Result<String> {
+    let bytes = fs_err::read(path)?;
+    let cert = X509::from_pem(&bytes).or_else(|_| X509::from_der(&bytes))?;
+    Ok(cert
+        .digest(MessageDigest::sha256())?
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect())
+}
+
+pub fn generate_ca(
+    cert_path: &std::path::Path,
+    key_path: &std::path::Path,
+    overwrite: bool,
+) -> anyhow::Result<GeneratedCa> {
+    use std::io::Write;
+    anyhow::ensure!(
+        cert_path != key_path,
+        "certificate and private key paths must differ"
+    );
+    anyhow::ensure!(
+        overwrite || (!cert_path.exists() && !key_path.exists()),
+        "CA files already exist; explicit overwrite required"
+    );
+    let config = SelfSignedCaBuilder::default().build()?;
+    let ca = SelfSignedCa::gen_signed_cert(&config).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let cert = ca.certificate.pem();
+    let key = ca.issuer.key().serialize_pem();
+    let prepare =
+        |path: &std::path::Path, bytes: &[u8]| -> anyhow::Result<tempfile::NamedTempFile> {
+            let parent = path
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(std::path::Path::new("."));
+            fs_err::create_dir_all(parent)?;
+            let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+            temp.write_all(bytes)?;
+            temp.as_file().sync_all()?;
+            Ok(temp)
+        };
+    let cert_temp = prepare(cert_path, cert.as_bytes())?;
+    let key_temp = prepare(key_path, key.as_bytes())?;
+    if overwrite {
+        // Keep the old key until the certificate rename has committed as well.
+        let backup = if key_path.exists() {
+            let backup = tempfile::Builder::new()
+                .prefix(".proxy-fork-ca-backup-")
+                .tempfile_in(key_temp.path().parent().unwrap())?;
+            fs_err::copy(key_path, backup.path())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                backup
+                    .as_file()
+                    .set_permissions(std::fs::Permissions::from_mode(0o600))?;
+            }
+            backup.as_file().sync_all()?;
+            Some(backup)
+        } else {
+            None
+        };
+        key_temp.persist(key_path).map_err(|e| e.error)?;
+        if let Err(error) = cert_temp.persist(cert_path) {
+            if let Some(backup) = backup {
+                if let Err(restore) = backup.persist(key_path) {
+                    let (_, recovery) = restore.file.keep()?;
+                    anyhow::bail!(
+                        "certificate replacement failed: {}; key rollback failed: {}; previous key retained at {}",
+                        error.error,
+                        restore.error,
+                        recovery.display()
+                    );
+                }
+            } else {
+                fs_err::remove_file(key_path)?;
+            }
+            return Err(error.error.into());
+        }
+    } else {
+        key_temp.persist_noclobber(key_path).map_err(|e| e.error)?;
+        if let Err(error) = cert_temp.persist_noclobber(cert_path) {
+            let _ = fs_err::remove_file(key_path);
+            return Err(error.error.into());
+        }
+    }
+    Ok(GeneratedCa {
+        cert_path: cert_path.into(),
+        key_path: key_path.into(),
+        fingerprint: certificate_fingerprint(cert_path)?,
+    })
+}
+
 // 证书颁发机构枚举，支持 OpenSSL 和无证书两种模式
 pub enum CaEnum {
     Openssl(OpensslAuthority),

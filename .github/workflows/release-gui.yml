@@ -1,0 +1,81 @@
+name: Package macOS GUI
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    env:
+      GUI_OFFICIAL_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '0' }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Require official signing credentials
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SIGNING_P12: ${{ secrets.APPLE_SIGNING_P12 }}
+          SIGNING_PASSWORD: ${{ secrets.APPLE_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${SIGNING_P12:?Missing signing certificate}"
+          : "${SIGNING_PASSWORD:?Missing signing certificate password}"
+          : "${APPLE_SIGNING_IDENTITY:?Missing signing identity}"
+          : "${APPLE_ID:?Missing Apple ID}"
+          : "${APPLE_TEAM_ID:?Missing Apple team}"
+          : "${APPLE_PASSWORD:?Missing notarization credentials}"
+          build_version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' Cargo.toml | head -1)
+          test "$GITHUB_REF_NAME" = "v$build_version"
+          signing_keychain="$RUNNER_TEMP/gui-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 24)
+          echo "::add-mask::$keychain_password"
+          printf '%s' "$SIGNING_P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$keychain_password" "$signing_keychain"
+          security unlock-keychain -p "$keychain_password" "$signing_keychain"
+          security import "$RUNNER_TEMP/signing.p12" -k "$signing_keychain" -P "$SIGNING_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$signing_keychain" >/dev/null
+          security list-keychains -d user -s "$signing_keychain"
+      - run: cargo install cargo-packager --version 0.11.8 --locked
+      - run: bash scripts/package-gui.sh '${{ matrix.target }}' release
+      - name: Verify actual archive with the updater extractor
+        run: |
+          gui_version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' Cargo.toml | head -1)
+          PROXY_FORK_GUI_TEST_ARCHIVE="$GITHUB_WORKSPACE/target/gui-package/${{ matrix.target }}/release/proxy-fork-gui-$gui_version-${{ matrix.target }}.app.tar.gz" cargo test --locked -p proxy-fork-gui --test updater_test packaged_update_archive_is_accepted -- --ignored
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gui-${{ matrix.target }}
+          path: |
+            target/gui-package/${{ matrix.target }}/release/*.app.tar.gz
+            target/gui-package/${{ matrix.target }}/release/*.sha256
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gui-*
+          path: gui-artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: gui-artifacts/*

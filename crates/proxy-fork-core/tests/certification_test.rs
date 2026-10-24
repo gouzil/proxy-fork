@@ -73,7 +73,7 @@ mod certification_test {
         // 转换为 PEM 格式并写入文件
         let ca_cert = X509::from_der(self_signed_ca.certificate.der()).unwrap();
         let pem_bytes = ca_cert.to_pem().unwrap();
-        std::fs::write(&file_path, &pem_bytes).unwrap();
+        fs_err::write(&file_path, &pem_bytes).unwrap();
 
         // 从文件加载证书
         let cert_bytes = load_cert_from_file(file_path.to_str().unwrap());
@@ -118,7 +118,7 @@ mod certification_test {
         // 2) load_cert from File
         let tmpdir = tempfile::tempdir().unwrap();
         let cert_path = tmpdir.path().join("loader-ca.pem");
-        std::fs::write(&cert_path, &pem_bytes).unwrap();
+        fs_err::write(&cert_path, &pem_bytes).unwrap();
         let loaded_file = load_cert(CertInput::File(cert_path.to_str().unwrap())).unwrap();
         assert_eq!(loaded_file, pem_bytes);
 

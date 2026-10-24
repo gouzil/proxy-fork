@@ -25,6 +25,9 @@ profile.json.gz
 .vscode
 .zed
 
+/docs/superpowers/
+/openspec/
+
 # config files
 proxy-fork.toml
 config.toml

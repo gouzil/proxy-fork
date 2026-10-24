@@ -1,0 +1,559 @@
+{
+  "_version": 2,
+  "settings.english": {
+    "en": "English",
+    "zh-CN": "English"
+  },
+  "settings.chinese": {
+    "en": "简体中文",
+    "zh-CN": "简体中文"
+  },
+  "app.title": {
+    "en": "Proxy Fork",
+    "zh-CN": "Proxy Fork"
+  },
+  "nav.dashboard": {
+    "en": "Overview",
+    "zh-CN": "概览"
+  },
+  "sidebar.local": {
+    "en": "Local service",
+    "zh-CN": "本地服务"
+  },
+  "dashboard.subtitle": {
+    "en": "Your local proxy, at a glance.",
+    "zh-CN": "代理状态与常用配置，一目了然。"
+  },
+  "dashboard.save": {
+    "en": "Save & apply",
+    "zh-CN": "保存并应用"
+  },
+  "dashboard.service": {
+    "en": "Proxy service",
+    "zh-CN": "代理服务"
+  },
+  "dashboard.service_hint": {
+    "en": "Start the service to accept local requests.",
+    "zh-CN": "启动服务，开始处理本地请求。"
+  },
+  "dashboard.listener": {
+    "en": "Listener settings",
+    "zh-CN": "监听设置"
+  },
+  "dashboard.rules": {
+    "en": "Request rules",
+    "zh-CN": "转发规则"
+  },
+  "dashboard.rule_count": {
+    "en": "Rules in the current draft",
+    "zh-CN": "当前草稿中的转发规则"
+  },
+  "dashboard.manage_rules": {
+    "en": "Manage rules",
+    "zh-CN": "管理转发规则"
+  },
+  "dashboard.https": {
+    "en": "HTTPS certificates",
+    "zh-CN": "HTTPS 证书"
+  },
+  "dashboard.intercept": {
+    "en": "HTTPS interception (CA)",
+    "zh-CN": "启用 HTTPS 拦截（CA）"
+  },
+  "dashboard.cert": {
+    "en": "Certificate path",
+    "zh-CN": "证书路径"
+  },
+  "dashboard.key": {
+    "en": "Private key path",
+    "zh-CN": "私钥路径"
+  },
+  "dashboard.default_path": {
+    "en": "Default location",
+    "zh-CN": "留空使用默认位置"
+  },
+  "dashboard.manage_ca": {
+    "en": "Manage certificate",
+    "zh-CN": "管理证书"
+  },
+  "rules.subtitle": {
+    "en": "Changes are validated and saved automatically.",
+    "zh-CN": "修改后自动校验、保存并生效。"
+  },
+  "logs.subtitle": {
+    "en": "Service events, without request content.",
+    "zh-CN": "查看服务事件，不记录请求内容。"
+  },
+  "settings.subtitle": {
+    "en": "Language, startup and application updates.",
+    "zh-CN": "管理语言、登录启动与应用更新。"
+  },
+  "nav.rules": {
+    "en": "Rules",
+    "zh-CN": "规则管理"
+  },
+  "nav.logs": {
+    "en": "Logs",
+    "zh-CN": "日志"
+  },
+  "nav.settings": {
+    "en": "Settings",
+    "zh-CN": "设置"
+  },
+  "action.start": {
+    "en": "Start",
+    "zh-CN": "启动"
+  },
+  "action.stop": {
+    "en": "Stop",
+    "zh-CN": "停止"
+  },
+  "action.save": {
+    "en": "Save configuration and apply rules",
+    "zh-CN": "保存配置并应用规则"
+  },
+  "action.close": {
+    "en": "Close",
+    "zh-CN": "关闭"
+  },
+  "action.exit": {
+    "en": "Quit",
+    "zh-CN": "退出"
+  },
+  "action.show": {
+    "en": "Show window",
+    "zh-CN": "显示窗口"
+  },
+  "action.refresh": {
+    "en": "Refresh",
+    "zh-CN": "刷新"
+  },
+  "state.stopped": {
+    "en": "Stopped",
+    "zh-CN": "已停止"
+  },
+  "state.starting": {
+    "en": "Starting",
+    "zh-CN": "正在启动"
+  },
+  "state.running": {
+    "en": "Running",
+    "zh-CN": "运行中"
+  },
+  "state.stopping": {
+    "en": "Stopping",
+    "zh-CN": "正在停止"
+  },
+  "state.failed": {
+    "en": "Failed",
+    "zh-CN": "失败"
+  },
+  "state.working": {
+    "en": "Working…",
+    "zh-CN": "处理中…"
+  },
+  "state.done": {
+    "en": "Completed",
+    "zh-CN": "已完成"
+  },
+  "state.saved": {
+    "en": "Saved",
+    "zh-CN": "已保存"
+  },
+  "state.preferences_failed": {
+    "en": "Configuration saved; GUI preferences were not saved. Edit a preference or quit to retry",
+    "zh-CN": "配置已保存；GUI 偏好未保存，修改偏好或退出时将重试"
+  },
+  "update.rolled_back": {
+    "en": "The update could not start. The previous application was restored and reopened; you can retry later.",
+    "zh-CN": "更新版本未能启动，已还原并重新打开旧版应用，请稍后重试。"
+  },
+  "settings.autostart_note": {
+    "en": "Login-item changes apply at the next login; the current session keeps running.",
+    "zh-CN": "登录项变更在下次登录时生效，当前会话继续运行。"
+  },
+  "state.error": {
+    "en": "Operation failed; details:",
+    "zh-CN": "操作失败，详情："
+  },
+  "proxy.host": {
+    "en": "Listen host",
+    "zh-CN": "监听主机"
+  },
+  "proxy.port": {
+    "en": "Listen port",
+    "zh-CN": "监听端口"
+  },
+  "proxy.cache": {
+    "en": "Rule cache capacity",
+    "zh-CN": "规则缓存容量"
+  },
+  "proxy.ca": {
+    "en": "Enable HTTPS interception (CA)",
+    "zh-CN": "启用 HTTPS 拦截（CA）"
+  },
+  "proxy.system": {
+    "en": "Use as system proxy",
+    "zh-CN": "设置为系统代理"
+  },
+  "proxy.cert": {
+    "en": "Certificate path (empty = default)",
+    "zh-CN": "证书路径（留空使用默认）"
+  },
+  "proxy.key": {
+    "en": "Private key path (empty = default)",
+    "zh-CN": "私钥路径（留空使用默认）"
+  },
+  "proxy.restart": {
+    "en": "Listener / CA / system-proxy changes take effect after restarting the proxy.",
+    "zh-CN": "监听地址、CA 和系统代理设置需重启代理后生效。"
+  },
+  "proxy.wizard": {
+    "en": "Certificate management",
+    "zh-CN": "证书管理"
+  },
+  "proxy.autosave": {
+    "en": "Settings save automatically on Enter or when you leave a field. Invalid edits keep the saved configuration.",
+    "zh-CN": "回车或离开字段后自动保存，无效输入不会覆盖已有配置。"
+  },
+  "rules.add": {
+    "en": "Add rule",
+    "zh-CN": "新增规则"
+  },
+  "rules.remove": {
+    "en": "Delete",
+    "zh-CN": "删除"
+  },
+  "rules.up": {
+    "en": "Move up",
+    "zh-CN": "上移"
+  },
+  "rules.down": {
+    "en": "Move down",
+    "zh-CN": "下移"
+  },
+  "rules.protocol": {
+    "en": "Source protocol",
+    "zh-CN": "来源协议"
+  },
+  "rules.host": {
+    "en": "Source host / pattern",
+    "zh-CN": "来源主机 / 匹配模式"
+  },
+  "rules.path": {
+    "en": "Source path / pattern",
+    "zh-CN": "来源路径 / 匹配模式"
+  },
+  "rules.port": {
+    "en": "Source port (optional)",
+    "zh-CN": "来源端口（可选）"
+  },
+  "rules.target_protocol": {
+    "en": "Target protocol (default http)",
+    "zh-CN": "目标协议（默认 http）"
+  },
+  "rules.target_host": {
+    "en": "Target host",
+    "zh-CN": "目标主机"
+  },
+  "rules.target_port": {
+    "en": "Target port (optional)",
+    "zh-CN": "目标端口（可选）"
+  },
+  "rules.target_path": {
+    "en": "Target path (optional)",
+    "zh-CN": "目标路径（可选）"
+  },
+  "rules.transform": {
+    "en": "Path mode: preserve / prepend / replace",
+    "zh-CN": "路径模式：preserve / prepend / replace"
+  },
+  "rules.empty": {
+    "en": "No forwarding rules yet",
+    "zh-CN": "还没有转发规则"
+  },
+  "rules.empty_hint": {
+    "en": "Use Add rule to set up your first forwarding target.",
+    "zh-CN": "点击「新增规则」，配置第一个转发目标。"
+  },
+  "rules.edit": {
+    "en": "Edit rule",
+    "zh-CN": "编辑规则"
+  },
+  "rules.more": {
+    "en": "More actions",
+    "zh-CN": "更多操作"
+  },
+  "rules.forward_to": {
+    "en": "Forward to",
+    "zh-CN": "转发至"
+  },
+  "rules.match_group": {
+    "en": "Match conditions",
+    "zh-CN": "匹配条件"
+  },
+  "rules.target_group": {
+    "en": "Forwarding target",
+    "zh-CN": "转发目标"
+  },
+  "rules.path_group": {
+    "en": "Path rewriting",
+    "zh-CN": "路径重写"
+  },
+  "rules.draft_hint": {
+    "en": "Edits save when a field loses focus or you close. Invalid drafts keep the last saved rules.",
+    "zh-CN": "离开字段或关闭时自动保存；未完成或无效的草稿不会覆盖已有规则。"
+  },
+  "rules.item": {
+    "en": "Rule",
+    "zh-CN": "规则"
+  },
+  "logs.clear": {
+    "en": "Clear",
+    "zh-CN": "清空"
+  },
+  "logs.pause": {
+    "en": "Pause",
+    "zh-CN": "暂停"
+  },
+  "logs.resume": {
+    "en": "Resume",
+    "zh-CN": "继续"
+  },
+  "logs.oldest": {
+    "en": "Oldest first",
+    "zh-CN": "时间正序"
+  },
+  "logs.newest": {
+    "en": "Newest first",
+    "zh-CN": "时间倒序"
+  },
+  "logs.filter": {
+    "en": "Filter logs",
+    "zh-CN": "筛选日志"
+  },
+  "logs.empty": {
+    "en": "No matching logs",
+    "zh-CN": "暂无匹配日志"
+  },
+  "logs.autoscroll": {
+    "en": "Auto scroll",
+    "zh-CN": "自动滚动"
+  },
+  "logs.level": {
+    "en": "Minimum level",
+    "zh-CN": "最低日志级别"
+  },
+  "logs.dropped": {
+    "en": "Dropped records",
+    "zh-CN": "丢弃条数"
+  },
+  "logs.privacy": {
+    "en": "UTC timestamps. Lifecycle logs only; request bodies, headers and private keys are excluded.",
+    "zh-CN": "时间为 UTC；仅显示生命周期日志，不采集请求正文、请求头和私钥。"
+  },
+  "logs.details": {
+    "en": "Log details",
+    "zh-CN": "日志详情"
+  },
+  "settings.appearance": {
+    "en": "Theme",
+    "zh-CN": "主题模式"
+  },
+  "settings.system_group": {
+    "en": "System settings",
+    "zh-CN": "系统设置"
+  },
+  "settings.general_group": {
+    "en": "App settings",
+    "zh-CN": "应用设置"
+  },
+  "settings.updates_group": {
+    "en": "Updates",
+    "zh-CN": "更新设置"
+  },
+  "settings.preferences": {
+    "en": "Preferences",
+    "zh-CN": "偏好设置"
+  },
+  "settings.manual_check": {
+    "en": "Manual check",
+    "zh-CN": "手动检查"
+  },
+  "settings.check_now": {
+    "en": "Check now",
+    "zh-CN": "立即检查"
+  },
+  "settings.theme_system": {
+    "en": "System",
+    "zh-CN": "系统"
+  },
+  "settings.theme_light": {
+    "en": "Light",
+    "zh-CN": "浅色"
+  },
+  "settings.theme_dark": {
+    "en": "Dark",
+    "zh-CN": "深色"
+  },
+  "settings.language": {
+    "en": "Language",
+    "zh-CN": "语言"
+  },
+  "settings.save": {
+    "en": "Save preferences",
+    "zh-CN": "保存偏好"
+  },
+  "settings.autostart": {
+    "en": "Start at login",
+    "zh-CN": "登录后自动启动"
+  },
+  "settings.unknown": {
+    "en": "Unknown; click to check",
+    "zh-CN": "状态未知，点击检查"
+  },
+  "settings.autostart_recover": {
+    "en": "State unavailable; click for recovery options",
+    "zh-CN": "状态读取失败，点击选择恢复操作"
+  },
+  "settings.enable": {
+    "en": "Enable",
+    "zh-CN": "启用"
+  },
+  "settings.disable": {
+    "en": "Disable",
+    "zh-CN": "停用"
+  },
+  "settings.enabled": {
+    "en": "Enabled",
+    "zh-CN": "已启用"
+  },
+  "settings.disabled": {
+    "en": "Disabled",
+    "zh-CN": "已停用"
+  },
+  "settings.unsupported": {
+    "en": "Platform integration is not yet implemented on this platform.",
+    "zh-CN": "此平台的系统集成功能尚未实现。"
+  },
+  "settings.updates": {
+    "en": "Automatic updates",
+    "zh-CN": "自动检查更新"
+  },
+  "settings.update_frequency": {
+    "en": "At most once per day.",
+    "zh-CN": "每天至多检查一次。"
+  },
+  "settings.accessibility": {
+    "en": "Keyboard navigation is supported. Dear ImGui does not expose a full VoiceOver accessibility tree.",
+    "zh-CN": "支持键盘导航；Dear ImGui 尚不提供完整的 VoiceOver 辅助功能树。"
+  },
+  "ca.description": {
+    "en": "This CA enables HTTPS interception. Trust it only for traffic you authorize. Your private key stays local.",
+    "zh-CN": "此 CA 用于 HTTPS 拦截。仅用于你有权代理的流量，私钥保留在本地。"
+  },
+  "ca.status_group": {
+    "en": "Certificate status",
+    "zh-CN": "证书状态"
+  },
+  "ca.info_group": {
+    "en": "Certificate information",
+    "zh-CN": "证书信息"
+  },
+  "ca.trust_group": {
+    "en": "Trust management",
+    "zh-CN": "信任管理"
+  },
+  "ca.unknown": {
+    "en": "Not checked",
+    "zh-CN": "尚未检查"
+  },
+  "ca.danger_group": {
+    "en": "Advanced / destructive actions",
+    "zh-CN": "高级 / 危险操作"
+  },
+  "ca.danger_hint": {
+    "en": "Replacing the CA invalidates existing trust. Remove this app's recorded trust first. Removal also requires the authorization above.",
+    "zh-CN": "覆盖 CA 会使已有信任失效，请先移除本应用记录的信任。移除同样需要勾选上方授权。"
+  },
+  "ca.regenerate": {
+    "en": "Regenerate CA files",
+    "zh-CN": "重新生成 CA 文件"
+  },
+  "ca.generate": {
+    "en": "Generate CA",
+    "zh-CN": "生成 CA"
+  },
+  "ca.overwrite": {
+    "en": "I confirm overwriting the existing CA files",
+    "zh-CN": "我确认覆盖已有 CA 文件"
+  },
+  "ca.fingerprint": {
+    "en": "SHA-256 fingerprint",
+    "zh-CN": "SHA-256 指纹"
+  },
+  "ca.keychain": {
+    "en": "Target: current user's default Keychain",
+    "zh-CN": "目标：当前用户的默认钥匙串"
+  },
+  "ca.confirm": {
+    "en": "I understand and authorize the Keychain change",
+    "zh-CN": "我了解并授权修改钥匙串"
+  },
+  "ca.install": {
+    "en": "Install trust",
+    "zh-CN": "安装信任"
+  },
+  "ca.remove": {
+    "en": "Remove this app's recorded certificate",
+    "zh-CN": "移除本应用记录的证书"
+  },
+  "ca.trusted": {
+    "en": "Trust verified",
+    "zh-CN": "已验证信任"
+  },
+  "ca.untrusted": {
+    "en": "Not trusted",
+    "zh-CN": "尚未信任"
+  },
+  "ca.not_configured": {
+    "en": "Not configured",
+    "zh-CN": "尚未配置"
+  },
+  "ca.setup_hint": {
+    "en": "No default CA was found. Generate one below, or configure an existing certificate and private key in Overview. Trust is installed only after your explicit confirmation.",
+    "zh-CN": "未找到默认 CA。可在下方生成，或在概览中配置已有证书和私钥；安装信任仍需你明确确认。"
+  },
+  "update.title": {
+    "en": "Application update",
+    "zh-CN": "应用更新"
+  },
+  "update.current": {
+    "en": "Already up to date",
+    "zh-CN": "当前已是最新版"
+  },
+  "update.available": {
+    "en": "Available version",
+    "zh-CN": "可更新版本"
+  },
+  "update.download": {
+    "en": "Download and verify",
+    "zh-CN": "下载并验证"
+  },
+  "update.install": {
+    "en": "Install update and restart",
+    "zh-CN": "安装更新并重启"
+  },
+  "update.ready": {
+    "en": "Download verified. Installing will stop the proxy and restore system settings.",
+    "zh-CN": "下载已验证，安装将停止代理并恢复系统代理设置。"
+  },
+  "update.progress": {
+    "en": "Downloaded bytes",
+    "zh-CN": "已下载字节"
+  },
+  "update.manual": {
+    "en": "This application directory is not writable. Open the verified update and replace the app manually.",
+    "zh-CN": "应用目录不可写，请打开已验证的更新产物并手工替换。"
+  }
+}
