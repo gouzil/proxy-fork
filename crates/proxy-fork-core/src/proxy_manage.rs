@@ -238,7 +238,7 @@ impl ProxyManager {
         self.pattern_rules.push(ProxyRule { pattern, target });
 
         // 清空缓存（规则变化）
-        self.cache.lock().await.clear();
+        self.cache.get_mut().clear();
     }
 
     /// 从 Uri 查找匹配的目标地址（带缓存）
