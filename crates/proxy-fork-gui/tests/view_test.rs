@@ -708,7 +708,13 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         );
         app.ca_keychain = Some("/test/login.keychain-db".into());
         if locale == "en" {
-            assert!(click(&mut context, &mut app, [250.0, 568.0 + offset]).is_empty());
+            // Other platforms show an extra unsupported-feature hint above this section.
+            let danger_y = if cfg!(target_os = "macos") {
+                568.0
+            } else {
+                591.0
+            };
+            assert!(click(&mut context, &mut app, [250.0, danger_y]).is_empty());
         }
         context.io_mut().add_mouse_pos_event([650.0, 530.0]);
         context.io_mut().add_mouse_wheel_event([0.0, -30.0]);
