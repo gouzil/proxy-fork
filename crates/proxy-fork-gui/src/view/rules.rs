@@ -1,13 +1,38 @@
 use super::{dialog, label, muted, primary_button, text, tooltip};
-use crate::app::{Action, App, RuleDraft};
+use crate::app::{App, RuleDraft};
 use imgui::{Key, StyleColor, StyleVar, Ui};
 
-fn field(ui: &Ui, key: &str, id: &str, value: &mut String, decimal: bool) {
+fn field(ui: &Ui, key: &str, id: &str, value: &mut String, decimal: bool) -> bool {
     muted(ui, key);
     ui.set_next_item_width(-1.0);
     ui.input_text(format!("###{id}"), value)
         .chars_decimal(decimal)
         .build();
+    ui.is_item_deactivated_after_edit()
+}
+
+fn optional_field(
+    ui: &Ui,
+    key: &str,
+    id: &str,
+    value: &mut Option<String>,
+    literal_empty: &mut bool,
+) -> bool {
+    let mut input = value.clone().unwrap_or_default();
+    let edited = field(ui, key, id, &mut input, false);
+    if ui.is_item_activated() {
+        // Escape must restore the distinction between a loaded empty path and no path.
+        *literal_empty = value.as_ref().is_some_and(String::is_empty);
+    }
+    let cancelled = ui.is_item_deactivated() && ui.is_key_pressed(Key::Escape);
+    if input != value.as_deref().unwrap_or_default() || (cancelled && *literal_empty) {
+        *value = if input.is_empty() && !(cancelled && *literal_empty) {
+            None
+        } else {
+            Some(input)
+        };
+    }
+    edited
 }
 
 fn endpoint(protocol: &str, host: &str, port: &str, path: Option<&str>) -> String {
@@ -19,7 +44,7 @@ fn endpoint(protocol: &str, host: &str, port: &str, path: Option<&str>) -> Strin
     format!("{protocol}://{host}{port}{}", path.unwrap_or_default())
 }
 
-pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
+pub fn draw(ui: &Ui, app: &mut App) {
     let _disabled = ui.begin_disabled(app.busy);
     let origin = ui.cursor_pos();
     let width = ui.content_region_avail()[0];
@@ -27,10 +52,6 @@ pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
     if primary_button(ui, label("rules.add", "add-rule"), [112.0, 34.0]) {
         app.add_rule();
         app.rule_editor = app.rules.last().map(|rule| rule.id);
-    }
-    ui.same_line_with_pos(origin[0] + width - 158.0);
-    if ui.button_with_size(label("dashboard.save", "save-rules"), [142.0, 34.0]) {
-        actions.push(Action::Save);
     }
     ui.set_cursor_pos([origin[0], origin[1] + 66.0]);
     if app.rules.is_empty() {
@@ -137,8 +158,10 @@ pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
     }
     if let Some(i) = delete {
         app.rules.remove(i);
+        app.request_rules_save();
     } else if let Some((a, b)) = swap {
         app.rules.swap(a, b);
+        app.request_rules_save();
     }
 }
 
@@ -158,9 +181,13 @@ pub fn editor(ui: &Ui, app: &mut App) {
     text(ui, "rules.edit");
     ui.set_window_font_scale(1.0);
     muted(ui, "rules.draft_hint");
+    let mut edited = false;
     ui.child_window("rule-fields").size([0.0, -48.0]).build(|| {
         let _disabled = ui.begin_disabled(app.busy);
-        fields(ui, draft);
+        edited = fields(ui, draft);
+        if let Some(error) = &app.rule_save_error {
+            ui.text_wrapped(error);
+        }
     });
     ui.set_cursor_pos([ui.window_content_region_max()[0] - 96.0, ui.cursor_pos()[1]]);
     if primary_button(ui, label("action.close", "close-rule"), [96.0, 34.0])
@@ -168,53 +195,58 @@ pub fn editor(ui: &Ui, app: &mut App) {
     {
         app.rule_editor = None;
         ui.close_current_popup();
+        edited = true;
+    }
+    if edited {
+        app.request_rules_save();
     }
 }
 
-fn fields(ui: &Ui, draft: &mut RuleDraft) {
+fn fields(ui: &Ui, draft: &mut RuleDraft) -> bool {
+    let mut edited = false;
     let _id = ui.push_id(draft.id.to_string());
     let columns = ui.content_region_avail()[0] >= 520.0;
     if columns {
         ui.columns(2, "rule-columns", false);
     }
     text(ui, "rules.match_group");
-    field(
+    edited |= field(
         ui,
         "rules.protocol",
         "protocol",
         &mut draft.rule.protocol,
         false,
     );
-    field(ui, "rules.host", "host", &mut draft.rule.host, false);
-    field(
+    edited |= field(ui, "rules.host", "host", &mut draft.rule.host, false);
+    edited |= optional_field(
         ui,
         "rules.path",
         "path",
-        draft.rule.path.get_or_insert_with(String::new),
-        false,
+        &mut draft.rule.path,
+        &mut draft.optional_literal_empty,
     );
-    field(ui, "rules.port", "port", &mut draft.source_port, true);
+    edited |= field(ui, "rules.port", "port", &mut draft.source_port, true);
     if columns {
         ui.next_column();
     } else {
         ui.dummy([0.0, 4.0]);
     }
     text(ui, "rules.target_group");
-    field(
+    edited |= optional_field(
         ui,
         "rules.target_protocol",
         "target-protocol",
-        draft.rule.target_protocol.get_or_insert_with(String::new),
-        false,
+        &mut draft.rule.target_protocol,
+        &mut draft.optional_literal_empty,
     );
-    field(
+    edited |= field(
         ui,
         "rules.target_host",
         "target-host",
         &mut draft.rule.target_host,
         false,
     );
-    field(
+    edited |= field(
         ui,
         "rules.target_port",
         "target-port",
@@ -227,18 +259,19 @@ fn fields(ui: &Ui, draft: &mut RuleDraft) {
     ui.dummy([0.0, 4.0]);
     text(ui, "rules.path_group");
     ui.separator();
-    field(
+    edited |= optional_field(
         ui,
         "rules.transform",
         "transform",
-        draft.rule.path_transform.get_or_insert_with(String::new),
-        false,
+        &mut draft.rule.path_transform,
+        &mut draft.optional_literal_empty,
     );
-    field(
+    edited |= optional_field(
         ui,
         "rules.target_path",
         "target-path",
-        draft.rule.target_path.get_or_insert_with(String::new),
-        false,
+        &mut draft.rule.target_path,
+        &mut draft.optional_literal_empty,
     );
+    edited
 }

@@ -20,6 +20,10 @@ use winit::{
     window::{Theme, Window},
 };
 
+pub(crate) mod backdrop;
+#[cfg(test)]
+mod backdrop_test;
+
 thread_local! { static IME_RECT: Cell<([f32; 2], f32)> = const { Cell::new(([0.0,0.0], 20.0)) }; }
 unsafe extern "C" fn ime_position(
     _: *mut imgui::sys::ImGuiViewport,
@@ -186,6 +190,8 @@ pub fn apply_theme(style: &mut imgui::Style, theme: Theme) {
     ] {
         style.colors[color as usize] = if dark { dark_color } else { light };
     }
+    // The same-frame GPU backdrop replaces ImGui's time-based white/dark dim animation.
+    style.colors[StyleColor::ModalWindowDimBg as usize] = [0.0; 4];
 }
 
 pub struct Graphics {
@@ -200,6 +206,7 @@ pub struct Graphics {
     input_state: Option<InputState>,
     platform: WinitPlatform,
     renderer: Renderer,
+    backdrop: backdrop::Backdrop,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
@@ -288,6 +295,7 @@ impl Graphics {
                 ..RendererConfig::default()
             },
         );
+        let backdrop = backdrop::Backdrop::new(&device, config.format);
         Ok(Self {
             window,
             context,
@@ -300,6 +308,7 @@ impl Graphics {
             input_state: None,
             platform,
             renderer,
+            backdrop,
             device,
             queue,
             surface,
@@ -510,31 +519,20 @@ impl Graphics {
                 label: Some("Proxy Fork UI"),
             });
         let background = self.context.style().colors[StyleColor::WindowBg as usize];
-        let attachments = [Some(wgpu::RenderPassColorAttachment {
-            view: &view,
-            resolve_target: None,
-            depth_slice: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color {
-                    r: background[0] as f64,
-                    g: background[1] as f64,
-                    b: background[2] as f64,
-                    a: 1.0,
-                }),
-                store: wgpu::StoreOp::Store,
+        self.backdrop.render(
+            self.context.render(),
+            &mut self.renderer,
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &view,
+            wgpu::Color {
+                r: background[0] as f64,
+                g: background[1] as f64,
+                b: background[2] as f64,
+                a: 1.0,
             },
-        })];
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Proxy Fork UI"),
-            color_attachments: &attachments,
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        self.renderer
-            .render(self.context.render(), &self.queue, &self.device, &mut pass)?;
-        drop(pass);
+        )?;
         self.queue.submit(Some(encoder.finish()));
         frame.present();
         self.frames += 1;

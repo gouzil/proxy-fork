@@ -77,8 +77,8 @@
     "zh-CN": "管理证书"
   },
   "rules.subtitle": {
-    "en": "Control where matching requests are forwarded.",
-    "zh-CN": "为匹配的请求指定转发目标。"
+    "en": "Changes are validated and saved automatically.",
+    "zh-CN": "修改后自动校验、保存并生效。"
   },
   "logs.subtitle": {
     "en": "Service events, without request content.",
@@ -161,8 +161,8 @@
     "zh-CN": "已保存"
   },
   "state.preferences_failed": {
-    "en": "Configuration and live rules saved; GUI preferences were not saved. Retry saving preferences",
-    "zh-CN": "配置与活动规则已保存；GUI 偏好未保存，请重试保存偏好"
+    "en": "Configuration saved; GUI preferences were not saved. Edit a preference or quit to retry",
+    "zh-CN": "配置已保存；GUI 偏好未保存，修改偏好或退出时将重试"
   },
   "update.rolled_back": {
     "en": "The update could not start. The previous application was restored and reopened; you can retry later.",
@@ -212,9 +212,9 @@
     "en": "Certificate management",
     "zh-CN": "证书管理"
   },
-  "proxy.unsaved": {
-    "en": "Configuration is validated before saving. Existing connections keep their current rules.",
-    "zh-CN": "保存前将校验全部配置，现有连接继续使用原规则。"
+  "proxy.autosave": {
+    "en": "Settings save automatically on Enter or when you leave a field. Invalid edits keep the saved configuration.",
+    "zh-CN": "回车或离开字段后自动保存，无效输入不会覆盖已有配置。"
   },
   "rules.add": {
     "en": "Add rule",
@@ -301,8 +301,8 @@
     "zh-CN": "路径重写"
   },
   "rules.draft_hint": {
-    "en": "Closing keeps your draft. Use Save & apply on the Rules page to validate and activate it.",
-    "zh-CN": "关闭后保留草稿；在规则页「保存并应用」才会校验、写入并生效。"
+    "en": "Edits save when a field loses focus or you close. Invalid drafts keep the last saved rules.",
+    "zh-CN": "离开字段或关闭时自动保存；未完成或无效的草稿不会覆盖已有规则。"
   },
   "rules.item": {
     "en": "Rule",
@@ -311,6 +311,30 @@
   "logs.clear": {
     "en": "Clear",
     "zh-CN": "清空"
+  },
+  "logs.pause": {
+    "en": "Pause",
+    "zh-CN": "暂停"
+  },
+  "logs.resume": {
+    "en": "Resume",
+    "zh-CN": "继续"
+  },
+  "logs.oldest": {
+    "en": "Oldest first",
+    "zh-CN": "时间正序"
+  },
+  "logs.newest": {
+    "en": "Newest first",
+    "zh-CN": "时间倒序"
+  },
+  "logs.filter": {
+    "en": "Filter logs",
+    "zh-CN": "筛选日志"
+  },
+  "logs.empty": {
+    "en": "No matching logs",
+    "zh-CN": "暂无匹配日志"
   },
   "logs.autoscroll": {
     "en": "Auto scroll",

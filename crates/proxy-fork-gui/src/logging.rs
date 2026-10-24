@@ -13,6 +13,7 @@ use tracing::{
 };
 use tracing_subscriber::{Layer, layer::Context};
 
+#[derive(Clone)]
 pub struct LogRecord {
     pub level: tracing::Level,
     pub line: String,

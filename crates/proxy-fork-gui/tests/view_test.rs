@@ -23,6 +23,37 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
     app.rules[0].rule.host = "draft.example".into();
     let draft_id = app.rules[0].id;
     let logs = LogBuffer::default();
+    // A blank header click must not submit configuration: edits save themselves.
+    context.io_mut().add_mouse_pos_event([850.0, 34.0]);
+    for _ in 0..4 {
+        view::draw(
+            context.frame(),
+            &mut app,
+            &logs,
+            winit::window::Theme::Light,
+        );
+        context.render();
+    }
+    context
+        .io_mut()
+        .add_mouse_button_event(MouseButton::Left, true);
+    context
+        .io_mut()
+        .add_mouse_button_event(MouseButton::Left, false);
+    let mut header_actions = Vec::new();
+    for _ in 0..4 {
+        header_actions.extend(view::draw(
+            context.frame(),
+            &mut app,
+            &logs,
+            winit::window::Theme::Light,
+        ));
+        context.render();
+    }
+    assert!(
+        header_actions.is_empty(),
+        "Overview must not have a Save & apply button"
+    );
     let frame = |context: &mut Context, app: &mut App| {
         let actions = view::draw(context.frame(), app, &logs, winit::window::Theme::Light);
         context.render();
@@ -261,8 +292,13 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
             (868.0, ThemePreference::System),
             (748.0, ThemePreference::Light),
         ] {
+            app.preferences_dirty = false;
             assert!(click(&mut context, &mut app, [x, 214.0]).is_empty());
             assert_eq!(app.preferences.theme, theme, "theme segment in {locale}");
+            assert!(
+                app.preferences_dirty,
+                "theme changes must queue an automatic save"
+            );
             context.io_mut().add_mouse_pos_event([600.0, 100.0]);
             frame(&mut context, &mut app);
             assert!(view::draw(context.frame(), &mut app, &logs, appearance).is_empty());
@@ -297,16 +333,17 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
             "the gap must not switch themes"
         );
         let automatic_updates = app.preferences.automatic_updates;
+        app.preferences_dirty = false;
         assert!(click(&mut context, &mut app, [521.0, 310.0]).is_empty());
         assert_eq!(
             app.preferences.automatic_updates,
             automatic_updates ^ cfg!(target_os = "macos"),
             "the update switch must preserve the platform guard in {locale}"
         );
-        assert_eq!(
-            click(&mut context, &mut app, [824.0, 270.0]),
-            vec![Action::SavePreferences],
-            "the compact preferences save must remain reachable in {locale}"
+        assert_eq!(app.preferences_dirty, cfg!(target_os = "macos"));
+        assert!(
+            click(&mut context, &mut app, [824.0, 270.0]).is_empty(),
+            "Settings must not have a Save preferences button in {locale}"
         );
         assert_eq!(
             click(&mut context, &mut app, [467.0, 358.0]),
@@ -323,10 +360,34 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         for _ in 0..4 {
             frame(&mut context, &mut app);
         }
+        let theme = app.preferences.theme;
+        let automatic_updates = app.preferences.automatic_updates;
+        app.preferences_dirty = false;
+        assert!(click(&mut context, &mut app, [808.0, 214.0]).is_empty());
+        assert!(click(&mut context, &mut app, [521.0, 310.0]).is_empty());
+        assert_eq!(
+            app.preferences.theme, theme,
+            "busy preferences must be frozen"
+        );
+        assert_eq!(app.preferences.automatic_updates, automatic_updates);
+        assert!(!app.preferences_dirty);
         assert!(click(&mut context, &mut app, [824.0, 293.0]).is_empty());
         assert!(click(&mut context, &mut app, [467.0, 381.0]).is_empty());
         assert!(!app.update_dialog);
         app.busy = false;
+        app.exiting = true;
+        for _ in 0..4 {
+            frame(&mut context, &mut app);
+        }
+        assert!(click(&mut context, &mut app, [808.0, 214.0]).is_empty());
+        assert!(click(&mut context, &mut app, [521.0, 310.0]).is_empty());
+        assert_eq!(
+            app.preferences.theme, theme,
+            "exit must not lose late edits"
+        );
+        assert_eq!(app.preferences.automatic_updates, automatic_updates);
+        assert!(!app.preferences_dirty);
+        app.exiting = false;
     }
 
     proxy_fork_gui::render::apply_theme(context.style_mut(), winit::window::Theme::Light);
@@ -403,9 +464,11 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         );
     }
 
+    app.preferences_dirty = false;
     app.page = Page::Rules;
     app.add_rule();
     app.rules[1].rule.host = "second.example".into();
+    app.rules_saved(app.edited_rules().unwrap());
     for _ in 0..4 {
         frame(&mut context, &mut app);
     }
@@ -428,6 +491,10 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
     );
     let new_id = app.rules.last().unwrap().id;
     assert_eq!(app.rule_editor, Some(new_id));
+    assert_eq!(app.rules.last().unwrap().rule.path, None);
+    assert_eq!(app.rules.last().unwrap().rule.target_path, None);
+    assert_eq!(app.rules.last().unwrap().rule.target_protocol, None);
+    assert_eq!(app.queued_action(), None, "an empty new draft is not saved");
     assert!(click(&mut context, &mut app, [350.0, 215.0]).is_empty());
     for character in "new.example".chars() {
         context.io_mut().add_input_character(character);
@@ -440,7 +507,15 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         "new.example",
         "editor text goes to the selected draft"
     );
+    assert_eq!(
+        app.queued_action(),
+        None,
+        "typing alone must not write each character"
+    );
     assert!(click(&mut context, &mut app, [600.0, 169.0]).is_empty());
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    assert_eq!(app.config.proxy_manager.rules.len(), 2);
+    app.rules_saved(app.edited_rules().unwrap());
     for character in "http".chars() {
         context.io_mut().add_input_character(character);
     }
@@ -458,10 +533,57 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         "Close stays reachable below the scroll body"
     );
     assert_eq!(app.rules.last().unwrap().rule.host, "new.example");
-    assert!(
-        app.config.proxy_manager.rules.is_empty(),
-        "closing does not save or apply drafts"
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    assert_eq!(app.config.proxy_manager.rules[2].target_protocol, None);
+    app.rules_saved(app.edited_rules().unwrap());
+    assert_eq!(app.queued_action(), None);
+
+    app.rules[2].rule.path = Some(String::new());
+    app.rules[2].rule.path_transform = Some("replace".into());
+    app.rules[2].rule.target_path = Some(String::new());
+    app.rules_saved(app.edited_rules().unwrap());
+    app.rule_editor = Some(new_id);
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert_eq!(app.rules[2].rule.path.as_deref(), Some(""));
+    assert_eq!(app.rules[2].rule.target_path.as_deref(), Some(""));
+    assert!(click(&mut context, &mut app, [738.0, 623.0]).is_empty());
+    assert_eq!(
+        app.queued_action(),
+        None,
+        "opening and closing is not an edit"
     );
+    app.rule_editor = Some(new_id);
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert!(click(&mut context, &mut app, [350.0, 268.0]).is_empty());
+    context.io_mut().add_input_character('X');
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert_eq!(app.rules[2].rule.path.as_deref(), Some("X"));
+    context.io_mut().add_key_event(imgui::Key::Backspace, true);
+    frame(&mut context, &mut app);
+    context.io_mut().add_key_event(imgui::Key::Backspace, false);
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert_eq!(
+        app.rules[2].rule.path, None,
+        "clearing removes an optional match"
+    );
+    context.io_mut().add_key_event(imgui::Key::Escape, true);
+    frame(&mut context, &mut app);
+    context.io_mut().add_key_event(imgui::Key::Escape, false);
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert_eq!(app.rule_editor, None);
+    assert_eq!(app.rules[2].rule.path.as_deref(), Some(""));
+    assert_eq!(app.edited_rules().unwrap()[2].path.as_deref(), Some(""));
+    assert_eq!(app.queued_action(), None);
 
     app.rules.truncate(2);
     app.rules[1].rule.host = format!("{}example", "very-long-label.".repeat(24));
@@ -500,9 +622,9 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         for _ in 0..4 {
             frame(&mut context, &mut app);
         }
-        assert_eq!(
-            click(&mut context, &mut app, [825.0, 120.0]),
-            vec![Action::Save]
+        assert!(
+            click(&mut context, &mut app, [825.0, 120.0]).is_empty(),
+            "the Rules page must not expose a separate Save action"
         );
     }
 
@@ -657,6 +779,7 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
     for _ in 0..4 {
         frame(&mut context, &mut app);
     }
+    app.rules_saved(app.edited_rules().unwrap());
     assert!(click(&mut context, &mut app, [884.0, 190.0]).is_empty());
     assert!(click(&mut context, &mut app, [870.0, 212.0]).is_empty());
     assert_ne!(
@@ -664,12 +787,16 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         "Move up is disabled for the first row"
     );
     assert!(click(&mut context, &mut app, [870.0, 235.0]).is_empty());
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    app.rules_saved(app.edited_rules().unwrap());
     assert_eq!(
         app.rules[0].id, second_id,
         "More > Move down must preserve the moved draft's identity"
     );
     assert!(click(&mut context, &mut app, [884.0, 274.0]).is_empty());
     assert!(click(&mut context, &mut app, [870.0, 345.0]).is_empty());
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    app.rules_saved(app.edited_rules().unwrap());
     assert_eq!(
         app.rules.len(),
         1,
@@ -695,6 +822,31 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
     assert!(click(&mut context, &mut app, [738.0, 623.0]).is_empty());
     assert_eq!(app.rule_editor, None);
     app.busy = false;
+
+    app.rules_saved(app.edited_rules().unwrap());
+    app.rule_editor = Some(second_id);
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert!(click(&mut context, &mut app, [350.0, 228.0]).is_empty());
+    let original = app.rules[0].rule.host.clone();
+    context.io_mut().add_input_character('X');
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert_ne!(app.rules[0].rule.host, original);
+    context.io_mut().add_key_event(imgui::Key::Escape, true);
+    frame(&mut context, &mut app);
+    context.io_mut().add_key_event(imgui::Key::Escape, false);
+    for _ in 0..4 {
+        frame(&mut context, &mut app);
+    }
+    assert_eq!(app.rule_editor, None);
+    assert_eq!(
+        app.rules[0].rule.host, original,
+        "Escape cancels the active field"
+    );
+    assert_eq!(app.queued_action(), None);
 
     context.fonts().clear();
     context.fonts().add_font(&[FontSource::TtfData {

@@ -75,12 +75,15 @@ fn dialog<'ui>(ui: &'ui Ui, key: &str, id: &str, size: [f32; 2]) -> Option<imgui
     }
     let _padding = ui.push_style_var(StyleVar::WindowPadding([24.0, 20.0]));
     let _rounding = ui.push_style_var(StyleVar::WindowRounding(12.0));
-    ui.modal_popup_config(title)
+    let token = ui
+        .modal_popup_config(title)
         .title_bar(false)
         .resizable(false)
         .movable(false)
         .save_settings(false)
-        .begin_popup()
+        .begin_popup()?;
+    crate::render::backdrop::mark_modal();
+    Some(token)
 }
 
 fn sidebar(ui: &Ui, app: &mut App) {
@@ -160,11 +163,15 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
                 } else {
                     196.0
                 };
+                let previous_page = app.page;
                 ui.child_window("sidebar")
                     .size([width, 0.0])
                     .always_use_window_padding(true)
                     .scrollable(false)
                     .build(|| sidebar(ui, app));
+                if previous_page == Page::Dashboard && app.page != previous_page {
+                    app.request_config_save();
+                }
             }
             ui.same_line_with_spacing(0.0, 0.0);
             let _background =
@@ -188,13 +195,8 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
                     text(ui, title);
                     ui.set_window_font_scale(1.0);
                     let below_title = ui.cursor_pos();
-                    if app.page == Page::Dashboard {
-                        ui.set_cursor_pos([ui.window_size()[0] - 166.0, top]);
-                        let _disabled = ui.begin_disabled(app.busy);
-                        if primary_button(ui, label("dashboard.save", "save-config"), [142.0, 34.0])
-                        {
-                            actions.push(Action::Save);
-                        }
+                    if app.page == Page::Logs {
+                        logs::toolbar(ui, app, log, top);
                         ui.set_cursor_pos(below_title);
                     }
                     muted(ui, subtitle);
@@ -202,7 +204,12 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
                     if app.busy {
                         muted(ui, "state.working");
                     }
-                    if let Some(error) = &app.error {
+                    for error in app
+                        .error
+                        .iter()
+                        .chain(app.rule_save_error.iter())
+                        .chain(app.config_save_error.iter())
+                    {
                         let _error = ui.push_style_color(
                             StyleColor::Text,
                             if theme == winit::window::Theme::Dark {
@@ -217,22 +224,14 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
                     if let Some(notice) = &app.notice {
                         text(ui, notice);
                     }
-                    let cards = matches!(app.page, Page::Dashboard | Page::Settings | Page::Rules);
-                    let _background = ui.push_style_color(
-                        StyleColor::ChildBg,
-                        if cards {
-                            [0.0; 4]
-                        } else {
-                            ui.style_color(StyleColor::PopupBg)
-                        },
-                    );
+                    let _background = ui.push_style_color(StyleColor::ChildBg, [0.0; 4]);
                     let _rounding = ui.push_style_var(StyleVar::ChildRounding(10.0));
                     ui.child_window(format!("page-{title}"))
                         .size([0.0, 0.0])
-                        .border(!cards)
+                        .scrollable(app.page != Page::Logs)
                         .build(|| match app.page {
                             Page::Dashboard => dashboard::draw(ui, app, &mut actions, theme),
-                            Page::Rules => rules::draw(ui, app, &mut actions),
+                            Page::Rules => rules::draw(ui, app),
                             Page::Logs => logs::draw(ui, app, log),
                             Page::Settings => settings::draw(ui, app, &mut actions),
                         });
@@ -243,17 +242,6 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
     rules::editor(ui, app);
     dashboard::certificate_dialog(ui, app, &mut actions);
     settings::update_dialog(ui, app, &mut actions);
-    if let Some(detail) = &app.log_detail {
-        let mut open = true;
-        ui.window(label("logs.details", "log-details"))
-            .opened(&mut open)
-            .size([700.0, 300.0], Condition::FirstUseEver)
-            .build(|| {
-                ui.text_wrapped(detail);
-            });
-        if !open {
-            app.log_detail = None;
-        }
-    }
+    logs::details(ui, app);
     actions
 }

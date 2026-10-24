@@ -1,8 +1,132 @@
-use proxy_fork_core::app_config::AppConfig;
+use proxy_fork_core::app_config::{AppConfig, RuleItem};
 use proxy_fork_gui::{
     app::{Action, App},
     preferences::{Preferences, ThemePreference},
 };
+
+#[test]
+fn exit_flushes_overview_settings_without_a_save_button() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.listen_port = "18080".into();
+    assert_eq!(app.begin(Action::Exit), Some(Action::Save));
+    assert!(app.exiting);
+    app.finish(Err("disk is read-only".into()));
+    assert!(!app.exiting);
+    assert_eq!(app.listen_port, "18080");
+    assert_eq!(app.queued_action(), None, "failed writes must not loop");
+}
+
+#[test]
+fn overview_autosave_does_not_commit_unfinished_rules_or_duplicate_writes() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.request_config_save();
+    assert_eq!(app.queued_action(), None);
+    app.add_rule(); // A new, unfinished rule must not prevent saving the listener.
+    app.listen_port = "18080".into();
+    assert!(app.edited_config().is_err());
+    app.request_config_save();
+    assert_eq!(app.queued_action(), Some(Action::Save));
+    let snapshot = app.edited_settings().unwrap();
+    assert!(snapshot.proxy_manager.rules.is_empty());
+    assert_eq!(snapshot.listen.port, 18080);
+    app.begin(Action::Save).unwrap();
+    assert_eq!(app.queued_action(), None);
+    app.config_saved(snapshot);
+    app.finish(Ok("saved".into()));
+    app.request_config_save();
+    assert_eq!(app.queued_action(), None);
+    assert_eq!(app.rules.len(), 1);
+}
+
+#[test]
+fn overview_changes_during_a_save_keep_the_latest_draft_and_preserve_other_errors() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.begin(Action::Stop).unwrap();
+    app.listen_port = "18080".into();
+    app.request_config_save();
+    app.finish(Err("system proxy restoration denied".into()));
+    assert_eq!(app.queued_action(), Some(Action::Save));
+    app.begin(Action::Save).unwrap();
+    let snapshot = app.edited_settings().unwrap();
+    app.listen_port = "7898".into(); // Revert while the first snapshot is being saved.
+    app.request_config_save();
+    app.config_saved(snapshot);
+    app.finish(Ok("saved".into()));
+    assert_eq!(app.listen_port, "7898");
+    assert_eq!(app.queued_action(), Some(Action::Save));
+    app.begin(Action::Save).unwrap();
+    app.config_saved(app.edited_settings().unwrap());
+    app.finish(Ok("saved".into()));
+    assert_eq!(app.queued_action(), None);
+    assert_eq!(
+        app.error.as_deref(),
+        Some("system proxy restoration denied")
+    );
+}
+
+#[test]
+fn invalid_overview_edits_remain_visible_without_retry_loops_or_blocking_rule_saves() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.listen_port = "0".into();
+    app.request_config_save();
+    app.begin(app.queued_action().unwrap()).unwrap();
+    app.finish(Err(app.edited_settings().unwrap_err().to_string()));
+    assert!(
+        app.config_save_error
+            .as_deref()
+            .unwrap()
+            .contains("non-zero")
+    );
+    assert_eq!(app.queued_action(), None);
+    app.add_rule();
+    app.rules[0].rule.host = "saved.example".into();
+    app.request_rules_save();
+    app.begin(Action::SaveRules).unwrap();
+    app.rules_saved(app.edited_rules().unwrap());
+    app.finish(Ok("saved".into()));
+    assert_eq!(app.queued_action(), None);
+    assert!(app.config_save_error.is_some());
+    app.listen_port = "7898".into();
+    app.request_config_save();
+    assert_eq!(app.config_save_error, None);
+    assert_eq!(
+        app.queued_action(),
+        None,
+        "rule saves must update the comparison baseline"
+    );
+}
+
+#[test]
+fn exit_flushes_both_rules_and_settings_in_sequence() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.add_rule();
+    app.rules[0].rule.host = "saved.example".into();
+    app.listen_port = "18080".into();
+    assert_eq!(app.begin(Action::Exit), Some(Action::SaveRules));
+    app.rules_saved(app.edited_rules().unwrap());
+    app.finish(Ok("rules saved".into()));
+    assert_eq!(app.queued_action(), Some(Action::Save));
+    app.begin(Action::Save).unwrap();
+    app.config_saved(app.edited_settings().unwrap());
+    app.finish(Ok("settings saved".into()));
+    assert_eq!(app.queued_action(), Some(Action::Exit));
+    assert_eq!(app.begin(Action::Exit), Some(Action::Exit));
+}
+
+#[test]
+fn leaving_overview_mid_edit_keeps_the_restart_warning_and_queues_the_save() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.state = proxy_fork_core::proxy_service::ProxyServiceState::Running(
+        "127.0.0.1:7898".parse().unwrap(),
+    );
+    app.begin(Action::CheckUpdate).unwrap();
+    app.listen_port = "18080".into();
+    app.request_config_save(); // The sidebar/hide path, without another Dashboard frame.
+    assert!(app.restart_required);
+    assert_eq!(app.queued_action(), None);
+    app.finish(Ok("checked".into()));
+    assert_eq!(app.queued_action(), Some(Action::Save));
+}
 
 #[test]
 fn duplicate_actions_are_rejected_and_language_preserves_rule_drafts() {
@@ -17,6 +141,207 @@ fn duplicate_actions_are_rejected_and_language_preserves_rule_drafts() {
     assert_eq!(app.rules[0].id, id);
     app.finish(Ok("complete".into()));
     assert!(app.begin(Action::Stop).is_some());
+}
+
+#[test]
+fn rule_autosave_is_independent_of_other_drafts_and_tracks_committed_rules() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.request_rules_save();
+    assert_eq!(app.queued_action(), None);
+    app.add_rule();
+    app.rules[0].rule.host = "first.example".into();
+    app.listen_port = "invalid".into();
+    app.cache_size = "invalid".into();
+    app.request_rules_save();
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    assert!(app.edited_config().is_err());
+    let saved = app.edited_rules().unwrap();
+    app.begin(Action::SaveRules).unwrap();
+    assert_eq!(app.queued_action(), None);
+    assert!(app.config.proxy_manager.rules.is_empty());
+
+    app.rules[0].rule.host = "second.example".into();
+    app.request_rules_save();
+    app.rules_saved(saved.clone());
+    app.finish(Ok("saved".into()));
+    assert_eq!(app.config.proxy_manager.rules, saved);
+    assert_eq!(app.rules[0].rule.host, "second.example");
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    app.begin(Action::SaveRules).unwrap();
+    let saved = app.edited_rules().unwrap();
+    app.request_rules_save(); // Closing during the write must not duplicate it.
+    app.rules_saved(saved);
+    app.finish(Ok("saved".into()));
+    app.request_rules_save();
+    assert_eq!(app.queued_action(), None);
+}
+
+#[test]
+fn invalid_or_failed_rule_autosave_keeps_drafts_without_retrying_forever() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.add_rule();
+    app.request_rules_save();
+    app.begin(app.queued_action().unwrap()).unwrap();
+    let error = app.edited_rules().unwrap_err().to_string();
+    app.finish(Err(error.clone()));
+    assert!(app.config.proxy_manager.rules.is_empty());
+    assert_eq!(app.rules.len(), 1);
+    assert_eq!(app.rule_save_error.as_deref(), Some(error.as_str()));
+    assert_eq!(app.queued_action(), None);
+
+    app.rules[0].rule.host = "fixed.example".into();
+    app.begin(Action::CheckUpdate).unwrap();
+    app.request_rules_save();
+    assert_eq!(app.queued_action(), None);
+    app.finish(Ok("checked".into()));
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    app.begin(app.queued_action().unwrap()).unwrap();
+    app.finish(Err("disk is read-only".into()));
+    assert_eq!(app.queued_action(), None);
+    assert!(app.config.proxy_manager.rules.is_empty());
+    assert_eq!(app.rules[0].rule.host, "fixed.example");
+}
+
+#[test]
+fn reverting_a_rule_while_its_save_is_in_flight_is_not_lost() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.add_rule();
+    app.rules[0].rule.host = "original.example".into();
+    app.rules_saved(app.edited_rules().unwrap());
+    app.rules[0].rule.host = "in-flight.example".into();
+    app.request_rules_save();
+    app.begin(Action::SaveRules).unwrap();
+    let saved = app.edited_rules().unwrap();
+    app.rules[0].rule.host = "original.example".into();
+    app.request_rules_save();
+    app.rules_saved(saved);
+    app.finish(Ok("saved".into()));
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    assert_eq!(app.edited_rules().unwrap()[0].host, "original.example");
+}
+
+#[test]
+fn exit_flushes_rules_before_stopping_and_failed_save_cancels_exit() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.add_rule();
+    app.rules[0].rule.host = "last.example".into();
+    app.rule_editor = Some(app.rules[0].id);
+    app.begin(Action::CheckUpdate).unwrap();
+    assert_eq!(app.begin(Action::Exit), None);
+    app.finish(Ok("checked".into()));
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    app.begin(app.queued_action().unwrap()).unwrap();
+    app.rules_saved(app.edited_rules().unwrap());
+    app.finish(Ok("saved".into()));
+    assert_eq!(app.queued_action(), Some(Action::Exit));
+    assert_eq!(app.begin(Action::Exit), Some(Action::Exit));
+    app.finish(Ok("exited".into()));
+
+    app.rules[0].rule.host.clear();
+    assert_eq!(app.begin(Action::Exit), Some(Action::SaveRules));
+    app.finish(Err("invalid rule".into()));
+    assert!(!app.exiting);
+    assert_eq!(app.queued_action(), None);
+}
+
+#[test]
+fn failed_rule_saves_are_not_discarded_by_exit_after_the_editor_is_closed() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.add_rule();
+    app.rules[0].rule.host = "unsaved.example".into();
+    app.request_rules_save();
+    app.begin(Action::SaveRules).unwrap();
+    app.finish(Err("disk is read-only".into()));
+    assert_eq!(app.rule_editor, None);
+    assert_eq!(app.queued_action(), None, "no automatic retry loop");
+    assert_eq!(app.begin(Action::Exit), Some(Action::SaveRules));
+    app.finish(Err("disk is still read-only".into()));
+    assert!(!app.exiting);
+    assert_eq!(app.queued_action(), None);
+    assert_eq!(app.rules[0].rule.host, "unsaved.example");
+}
+
+#[test]
+fn rule_autosave_does_not_hide_the_failure_of_the_operation_it_waited_for() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.add_rule();
+    app.rules[0].rule.host = "queued.example".into();
+    app.begin(Action::Stop).unwrap();
+    app.request_rules_save();
+    app.finish(Err("system proxy restoration denied".into()));
+    app.begin(app.queued_action().unwrap()).unwrap();
+    assert_eq!(
+        app.error.as_deref(),
+        Some("system proxy restoration denied")
+    );
+    app.rules_saved(app.edited_rules().unwrap());
+    app.finish(Ok("saved".into()));
+    assert_eq!(
+        app.error.as_deref(),
+        Some("system proxy restoration denied")
+    );
+    assert_eq!(app.rule_save_error, None);
+
+    app.rules[0].rule.host = "retry.example".into();
+    app.request_rules_save();
+    app.begin(app.queued_action().unwrap()).unwrap();
+    app.finish(Err("disk is read-only".into()));
+    assert_eq!(
+        app.error.as_deref(),
+        Some("system proxy restoration denied")
+    );
+    assert_eq!(app.rule_save_error.as_deref(), Some("disk is read-only"));
+    app.request_rules_save();
+    app.begin(app.queued_action().unwrap()).unwrap();
+    app.rules_saved(app.edited_rules().unwrap());
+    app.finish(Ok("saved".into()));
+    assert_eq!(app.rule_save_error, None);
+    assert_eq!(
+        app.error.as_deref(),
+        Some("system proxy restoration denied")
+    );
+}
+
+#[test]
+fn restoring_the_saved_rule_clears_stale_errors_without_another_write() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.add_rule();
+    app.rules[0].rule.host = "saved.example".into();
+    app.rules_saved(app.edited_rules().unwrap());
+    app.rules[0].source_port = "0".into();
+    app.request_rules_save();
+    app.begin(app.queued_action().unwrap()).unwrap();
+    app.finish(Err(app.edited_rules().unwrap_err().to_string()));
+    assert!(app.rule_save_error.is_some());
+    app.rules[0].source_port.clear();
+    app.request_rules_save();
+    assert_eq!(app.queued_action(), None);
+    assert_eq!(app.rule_save_error, None);
+}
+
+#[test]
+fn loaded_empty_paths_are_not_normalized_by_autosave_or_exit() {
+    let mut config = AppConfig::default();
+    let original = RuleItem {
+        protocol: "http".into(),
+        host: "literal-empty.example".into(),
+        path: Some(String::new()),
+        target_host: "127.0.0.1".into(),
+        path_transform: Some("replace".into()),
+        target_path: Some(String::new()),
+        ..RuleItem::default()
+    };
+    config.proxy_manager.rules.push(original.clone());
+    let mut app = App::new(config.clone(), Preferences::default());
+    app.request_rules_save();
+    assert_eq!(app.queued_action(), None);
+    assert_eq!(app.begin(Action::Exit), Some(Action::Exit));
+    let mut app = App::new(config, Preferences::default());
+    app.add_rule();
+    app.rules[1].rule.host = "another.example".into();
+    app.request_rules_save();
+    assert_eq!(app.queued_action(), Some(Action::SaveRules));
+    assert_eq!(app.edited_rules().unwrap()[0], original);
 }
 
 #[test]

@@ -2,11 +2,16 @@ use crate::{
     app::Action,
     updater::{Release, VerifiedUpdate},
 };
-use proxy_fork_core::{GeneratedCa, proxy_service::ProxyServiceState};
+use proxy_fork_core::{
+    GeneratedCa,
+    app_config::{AppConfig, RuleItem},
+    proxy_service::ProxyServiceState,
+};
 
 pub enum Outcome {
     Done(&'static str),
-    Saved(Option<String>),
+    Saved(Option<String>, AppConfig),
+    RulesSaved(Vec<RuleItem>),
     Preferences,
     Certificate(GeneratedCa, Option<String>),
     CaNotConfigured(Option<String>),

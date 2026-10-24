@@ -77,7 +77,9 @@ fn listener(ui: &Ui, app: &mut App) -> bool {
     ui.set_next_item_width(-1.0);
     let mut changed = ui
         .input_text("###listen-host", &mut app.config.listen.host)
+        .enter_returns_true(true)
         .build();
+    changed |= ui.is_item_deactivated_after_edit();
     ui.set_cursor_pos([18.0, 110.0]);
     ui.align_text_to_frame_padding();
     text(ui, "proxy.port");
@@ -86,7 +88,9 @@ fn listener(ui: &Ui, app: &mut App) -> bool {
     changed |= ui
         .input_text("###listen-port", &mut app.listen_port)
         .chars_decimal(true)
+        .enter_returns_true(true)
         .build();
+    changed |= ui.is_item_deactivated_after_edit();
     ui.set_cursor_pos([18.0, 158.0]);
     changed |= ui.checkbox(
         label("proxy.system", "system-proxy"),
@@ -104,10 +108,12 @@ fn rules(ui: &Ui, app: &mut App) -> bool {
     ui.set_cursor_pos([18.0, 132.0]);
     text(ui, "proxy.cache");
     ui.set_next_item_width(120.0);
-    let changed = ui
+    let mut changed = ui
         .input_text("###cache-size", &mut app.cache_size)
         .chars_decimal(true)
+        .enter_returns_true(true)
         .build();
+    changed |= ui.is_item_deactivated_after_edit();
     ui.set_cursor_pos([18.0, 212.0]);
     if ui.button_with_size(label("dashboard.manage_rules", "manage-rules"), [0.0, 34.0]) {
         app.page = Page::Rules;
@@ -128,14 +134,18 @@ fn certificates(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) -> bool {
     changed |= ui
         .input_text("###cert-path", &mut app.cert_path)
         .hint(rust_i18n::t!("dashboard.default_path"))
+        .enter_returns_true(true)
         .build();
+    changed |= ui.is_item_deactivated_after_edit();
     ui.set_cursor_pos([18.0, 150.0]);
     text(ui, "dashboard.key");
     ui.set_next_item_width(-1.0);
     changed |= ui
         .input_text("###key-path", &mut app.key_path)
         .hint(rust_i18n::t!("dashboard.default_path"))
+        .enter_returns_true(true)
         .build();
+    changed |= ui.is_item_deactivated_after_edit();
     ui.set_cursor_pos([18.0, 212.0]);
     if ui.button_with_size(label("dashboard.manage_ca", "open-ca"), [0.0, 34.0]) {
         app.ca_dialog = true;
@@ -182,15 +192,15 @@ pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>, theme: winit::win
                 }
             });
     }
-    if changed && app.running() {
-        app.restart_required = true;
+    if changed {
+        app.request_config_save();
     }
     let bottom = cards.iter().map(|r| r[1] + r[3]).fold(0.0, f32::max);
     ui.set_cursor_pos([origin[0], origin[1] + bottom + 16.0]);
     if app.restart_required {
         text(ui, "proxy.restart");
     }
-    muted(ui, "proxy.unsaved");
+    muted(ui, "proxy.autosave");
 }
 
 pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {

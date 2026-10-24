@@ -4,6 +4,36 @@ use proxy_fork_core::{
 };
 
 #[tokio::test]
+async fn settings_can_be_saved_before_ca_setup_but_cannot_start_with_missing_ca() {
+    use proxy_fork_core::app_config::FileConfig;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let service = ProxyService::new(dir.path().join("restore.toml"));
+    let mut config = AppConfig {
+        ca_cert: Some(dir.path().join("missing.crt")),
+        ca_key: Some(dir.path().join("missing.key")),
+        ..AppConfig::default()
+    };
+    service
+        .save_and_replace_rules(&config, path.clone())
+        .await
+        .unwrap();
+    assert_eq!(FileConfig::load(&path).unwrap(), config.file_config());
+    assert!(service.start(config.clone()).await.is_err());
+    assert!(!config.ca_cert.as_ref().unwrap().exists());
+    let saved = fs_err::read(&path).unwrap();
+    config.proxy_manager.cache_size = 0;
+    assert!(
+        service
+            .save_and_replace_rules(&config, path.clone())
+            .await
+            .is_err()
+    );
+    assert_eq!(fs_err::read(&path).unwrap(), saved);
+    assert!(!dir.path().join("restore.toml").exists());
+}
+
+#[tokio::test]
 async fn service_restarts_and_rejects_duplicate_start() {
     let dir = tempfile::tempdir().unwrap();
     let service = ProxyService::new(dir.path().join("restore.toml"));
@@ -104,6 +134,12 @@ async fn saving_rules_is_all_or_nothing_for_disk_and_live_requests() {
             .await
             .is_err()
     );
+    assert!(
+        service
+            .save_rules(changed.proxy_manager.rules.clone(), path.clone())
+            .await
+            .is_err()
+    );
     assert_eq!(fs_err::read(&path).unwrap(), original);
     assert_eq!(
         client
@@ -122,6 +158,15 @@ async fn saving_rules_is_all_or_nothing_for_disk_and_live_requests() {
     assert!(
         service
             .save_and_replace_rules(&changed, blocked.join("config.toml"))
+            .await
+            .is_err()
+    );
+    assert!(
+        service
+            .save_rules(
+                changed.proxy_manager.rules.clone(),
+                blocked.join("config.toml")
+            )
             .await
             .is_err()
     );
@@ -153,7 +198,72 @@ async fn saving_rules_is_all_or_nothing_for_disk_and_live_requests() {
             .unwrap(),
         "new"
     );
+    service
+        .save_rules(config.proxy_manager.rules.clone(), path.clone())
+        .await
+        .unwrap();
+    assert_eq!(FileConfig::load(&path).unwrap(), config.file_config());
+    assert_eq!(
+        client
+            .get("http://service.test/")
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap(),
+        "old"
+    );
     service.stop().await.unwrap();
     old_server.abort();
     new_server.abort();
+}
+
+#[tokio::test]
+async fn rule_only_save_preserves_settings_without_requiring_ca_files() {
+    use proxy_fork_core::app_config::{FileConfig, RuleItem};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let service = ProxyService::new(dir.path().join("restore.toml"));
+    let first = RuleItem {
+        protocol: "https".into(),
+        host: "first.example".into(),
+        target_host: "127.0.0.1".into(),
+        ..RuleItem::default()
+    };
+    let mut second = first.clone();
+    second.host = "second.example".into();
+    let rules = vec![first, second];
+    service
+        .save_rules(rules.clone(), path.clone())
+        .await
+        .unwrap();
+    let initial = FileConfig::load(&path).unwrap().runtime().unwrap();
+    assert!(initial.enable_ca);
+    assert_eq!(initial.proxy_manager.rules, rules);
+
+    let mut disk = initial.file_config();
+    disk.listen = Some("127.0.0.1:18999".into());
+    disk.cert = Some(dir.path().join("missing.crt").display().to_string());
+    disk.key = Some(dir.path().join("missing.key").display().to_string());
+    disk.proxy_manager.as_mut().unwrap().cache_size = Some(123);
+    assert!(
+        disk.save(&path).is_err(),
+        "full saves still validate CA files"
+    );
+    fs_err::write(&path, toml::to_string(&disk).unwrap()).unwrap();
+    let reversed: Vec<_> = rules.into_iter().rev().collect();
+    service
+        .save_rules(reversed.clone(), path.clone())
+        .await
+        .unwrap();
+    disk.proxy_manager.as_mut().unwrap().rules = Some(reversed);
+    assert_eq!(FileConfig::load(&path).unwrap(), disk);
+    service.save_rules(Vec::new(), path.clone()).await.unwrap();
+    disk.proxy_manager.as_mut().unwrap().rules = Some(Vec::new());
+    assert_eq!(FileConfig::load(&path).unwrap(), disk);
+
+    fs_err::write(&path, "broken = [").unwrap();
+    assert!(service.save_rules(Vec::new(), path.clone()).await.is_err());
+    assert_eq!(fs_err::read_to_string(&path).unwrap(), "broken = [");
 }

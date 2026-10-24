@@ -85,7 +85,8 @@ fn autostart(ui: &Ui, app: &App, actions: &mut Vec<Action>) {
     });
 }
 
-fn general(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
+fn general(ui: &Ui, app: &mut App) {
+    let _disabled = ui.begin_disabled(app.busy || app.exiting);
     row(ui, "settings.language", 164.0, ui.frame_height(), |ui| {
         let preview = rust_i18n::t!(if app.preferences.locale == "zh-CN" {
             "settings.chinese"
@@ -143,16 +144,10 @@ fn general(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
             }
         }
     });
-    row(ui, "settings.preferences", 148.0, 32.0, |ui| {
-        let _disabled = ui.begin_disabled(app.busy);
-        if ui.button_with_size(label("settings.save", "save-preferences"), [148.0, 32.0]) {
-            actions.push(Action::SavePreferences);
-        }
-    });
 }
 
 fn updates(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
-    let _platform = ui.begin_disabled(!cfg!(target_os = "macos"));
+    let _platform = ui.begin_disabled(app.busy || app.exiting || !cfg!(target_os = "macos"));
     row(ui, "settings.updates", 42.0, 26.0, |ui| {
         if switch(
             ui,
@@ -175,6 +170,11 @@ fn updates(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
 }
 
 pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
+    let before = (
+        app.preferences.locale.clone(),
+        app.preferences.theme,
+        app.preferences.automatic_updates,
+    );
     let origin = ui.cursor_pos();
     let available = ui.content_region_avail()[0];
     let wide = available >= 656.0;
@@ -189,12 +189,12 @@ pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
             "settings.general_group",
             if wide { width + 16.0 } else { 0.0 },
             if wide { 0.0 } else { 144.0 },
-            224.0,
+            176.0,
         ),
         (
             "settings.updates_group",
             0.0,
-            if wide { 144.0 } else { 384.0 },
+            if wide { 144.0 } else { 336.0 },
             176.0,
         ),
     ]
@@ -217,7 +217,7 @@ pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
                 ui.set_cursor_pos([18.0, 54.0]);
                 match index {
                     0 => autostart(ui, app, actions),
-                    1 => general(ui, app, actions),
+                    1 => general(ui, app),
                     _ => updates(ui, app, actions),
                 }
             });
@@ -225,11 +225,20 @@ pub fn draw(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
     if cfg!(target_os = "macos") && ui.is_window_appearing() && !app.busy && actions.is_empty() {
         actions.push(Action::InspectAutostart);
     }
-    ui.set_cursor_pos([origin[0], origin[1] + if wide { 336.0 } else { 576.0 }]);
+    ui.set_cursor_pos([origin[0], origin[1] + if wide { 336.0 } else { 528.0 }]);
     if !cfg!(target_os = "macos") {
         muted(ui, "settings.unsupported");
     }
     muted(ui, "settings.accessibility");
+    if before
+        != (
+            app.preferences.locale.clone(),
+            app.preferences.theme,
+            app.preferences.automatic_updates,
+        )
+    {
+        app.preferences_dirty = true;
+    }
 }
 
 pub fn update_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {

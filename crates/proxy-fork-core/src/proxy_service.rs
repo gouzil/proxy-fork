@@ -1,6 +1,6 @@
 use crate::{
     CaEnum, CertInput, NoCa, Proxy, ProxyHandlerBuilder, ProxyManager,
-    app_config::{AppConfig, atomic_write},
+    app_config::{AppConfig, FileConfig, RuleItem, atomic_write},
     dirs, load_ca_from_sources,
     rustls::crypto::aws_lc_rs,
     system_proxy::ProxySettings,
@@ -215,7 +215,37 @@ impl ProxyService {
         let manager = cfg.build_manager().await?;
         let running = self.running.lock().await;
         let disk = cfg.file_config();
-        tokio::task::spawn_blocking(move || disk.save(&path)).await??;
+        // Persist structurally valid settings before CA setup; startup still loads and validates the CA.
+        disk.runtime()?;
+        tokio::task::spawn_blocking(move || {
+            atomic_write(&path, toml::to_string_pretty(&disk)?.as_bytes())
+        })
+        .await??;
+        if let Some(r) = running.as_ref() {
+            *r.manager.write().await = manager;
+        }
+        Ok(())
+    }
+
+    pub async fn save_rules(&self, rules: Vec<RuleItem>, path: PathBuf) -> Result<()> {
+        let running = self.running.lock().await;
+        let read_path = path.clone();
+        let disk = tokio::task::spawn_blocking(move || {
+            let mut disk: FileConfig = match fs_err::read_to_string(&read_path) {
+                Ok(contents) => toml::from_str(&contents)?,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => FileConfig::default(),
+                Err(error) => return Err(error.into()),
+            };
+            disk.proxy_manager.get_or_insert_default().rules = Some(rules);
+            Ok::<_, anyhow::Error>(disk)
+        })
+        .await??;
+        let manager = disk.runtime()?.build_manager().await?;
+        // Editing rules must not require generating a CA or commit unrelated GUI drafts.
+        tokio::task::spawn_blocking(move || {
+            atomic_write(&path, toml::to_string_pretty(&disk)?.as_bytes())
+        })
+        .await??;
         if let Some(r) = running.as_ref() {
             *r.manager.write().await = manager;
         }

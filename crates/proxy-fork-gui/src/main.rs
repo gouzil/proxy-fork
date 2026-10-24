@@ -70,11 +70,29 @@ impl Desktop {
             return;
         };
         let config = if matches!(action, Action::Start | Action::Save) {
-            match self.app.edited_config() {
+            match if action == Action::Save {
+                self.app.edited_settings()
+            } else {
+                self.app.edited_config()
+            } {
                 Ok(config) => Some(config),
                 Err(error) => {
-                    self.app.finish(Err(error.to_string()));
-                    self.show();
+                    let _ = self
+                        .proxy
+                        .send_event(AppEvent::Finished(Err(error.to_string())));
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let rules = if action == Action::SaveRules {
+            match self.app.edited_rules() {
+                Ok(rules) => Some(rules),
+                Err(error) => {
+                    let _ = self
+                        .proxy
+                        .send_event(AppEvent::Finished(Err(format!("{error:#}"))));
                     return;
                 }
             }
@@ -87,7 +105,12 @@ impl Desktop {
         let config_path = self.config_path.clone();
         let state_dir = self.state_dir.clone();
         let mut preferences = self.app.preferences.clone();
-        preferences.system_proxy = self.app.config.enable_sysproxy;
+        if action == Action::Save {
+            preferences.system_proxy = config
+                .as_ref()
+                .expect("validated save configuration")
+                .enable_sysproxy;
+        }
         let default_cert = dirs::default_cert_path();
         let cert = if self.app.cert_path.is_empty() {
             default_cert.clone()
@@ -130,7 +153,12 @@ impl Desktop {
                             preferences_path,
                         )
                         .await?;
-                        Ok(Outcome::Saved(warning))
+                        Ok(Outcome::Saved(warning, config))
+                    }
+                    Action::SaveRules => {
+                        let rules = rules.context("missing rules")?;
+                        service.save_rules(rules.clone(), config_path).await?;
+                        Ok(Outcome::RulesSaved(rules))
                     }
                     Action::SavePreferences => {
                         tokio::task::spawn_blocking(move || preferences.save(&preferences_path))
@@ -312,20 +340,29 @@ impl Desktop {
                 let mut notice = None;
                 match outcome {
                     Outcome::Done(key) => message = key,
-                    Outcome::Saved(warning) => {
+                    Outcome::Saved(warning, config) => {
                         message = "state.saved";
-                        self.app.preferences.system_proxy = self.app.config.enable_sysproxy;
+                        self.app.preferences.system_proxy = config.enable_sysproxy;
+                        self.app.config_saved(config);
                         if let Some(warning) = warning {
-                            self.app.error = Some(format!(
+                            let warning = format!(
                                 "{}: {warning}",
                                 proxy_fork_gui::_rust_i18n_translate(
                                     &rust_i18n::locale(),
                                     "state.preferences_failed"
                                 )
-                            ));
+                            );
+                            self.app.error = Some(match self.app.error.take() {
+                                Some(previous) => format!("{previous}\n{warning}"),
+                                None => warning,
+                            });
                             self.app.exiting = false;
                             self.show();
                         }
+                    }
+                    Outcome::RulesSaved(rules) => {
+                        message = "state.saved";
+                        self.app.rules_saved(rules);
                     }
                     Outcome::Preferences => {
                         message = "state.saved";
@@ -339,6 +376,7 @@ impl Desktop {
                         self.app.ca_missing = false;
                         self.app.ca_confirm = false;
                         self.app.ca_overwrite = false;
+                        self.app.request_config_save();
                     }
                     Outcome::CaNotConfigured(recorded) => {
                         self.app.ca_not_configured(recorded);
@@ -478,6 +516,10 @@ impl ApplicationHandler<AppEvent> for Desktop {
         }
         match event {
             WindowEvent::CloseRequested => {
+                self.app.request_config_save();
+                if let Some(action) = self.app.queued_action() {
+                    self.action(action);
+                }
                 #[cfg(target_os = "macos")]
                 let has_tray = self.tray.is_some();
                 #[cfg(not(target_os = "macos"))]
@@ -538,7 +580,6 @@ impl ApplicationHandler<AppEvent> for Desktop {
             }
             WindowEvent::RedrawRequested => {
                 if self.visible.load(Ordering::Relaxed) {
-                    let locale = self.app.preferences.locale.clone();
                     let theme = self.app.preferences.theme;
                     let result = self
                         .graphics
@@ -560,13 +601,8 @@ impl ApplicationHandler<AppEvent> for Desktop {
                     {
                         graphics.set_theme(self.app.preferences.theme);
                     }
-                    if locale != self.app.preferences.locale || theme != self.app.preferences.theme
-                    {
-                        self.app.preferences_dirty = true;
-                        if let Some(action) = self.app.queued_action() {
-                            self.action(action);
-                        }
-                        self.request_redraw();
+                    if let Some(action) = self.app.queued_action() {
+                        self.action(action);
                     }
                 }
             }
