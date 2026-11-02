@@ -76,6 +76,7 @@ cargo run --locked -p proxy-fork-gui
 首次使用可在状态页关闭 CA，以普通 HTTP/CONNECT 代理启动；HTTPS 内容改写需要先生成并手动信任 CA。
 系统代理默认关闭，CA 信任、自启动和自动更新均需主动启用。请勿将生成的私钥提交到版本库。
 关闭窗口会隐藏到菜单栏；使用托盘“退出”才会停止代理并恢复本应用接管的系统代理。
+停止时会关闭 CONNECT/WebSocket 长连接，普通 HTTP 响应最多等待 2 秒后断开，以便恢复系统代理。
 
 配置目录沿用 CLI 的平台目录（macOS/Linux 默认 `~/.config/proxy-fork`，尊重 `XDG_CONFIG_HOME`）：
 `config.toml` 保存代理配置，`gui.toml` 单独保存语言、窗口尺寸等桌面偏好；GUI 不读取当前工作目录的项目配置。
@@ -104,7 +105,7 @@ Linux 构建需要 `pkg-config`、C++/Clang、`libxkbcommon-dev` 和 `libwayland
 
 ## 开发
 
-### WebSocket 代理补丁说明
+### HTTP/WebSocket 代理补丁说明
 
 项目在 `Cargo.toml` 中通过 `[patch.crates-io]` 引入本地 `crates/hudsucker` 补丁版本。
 
@@ -114,6 +115,7 @@ Linux 构建需要 `pkg-config`、C++/Clang、`libxkbcommon-dev` 和 `libwayland
 
 - `hudsucker` 会先连接上游 WebSocket，再把上游实际返回的 `Sec-WebSocket-Protocol` 同步到给客户端的 `101 Switching Protocols` 响应
 - WebSocket 规则改写 URI 后会同步更新上游握手请求的 `Host` 头
+- 停止时取消 CONNECT/WebSocket 任务，并限制普通 HTTP 连接的退出等待，避免长连接阻塞系统代理恢复
 
 后续维护建议：
 

@@ -3,6 +3,7 @@ use std::path::Path;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum KeychainError {
+    Expired,
     PermissionDenied,
     NotFound,
     InvalidOutput,
@@ -11,10 +12,13 @@ pub enum KeychainError {
 impl std::fmt::Display for KeychainError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::PermissionDenied => f.write_str("Keychain authorization was denied or cancelled"),
-            Self::NotFound => f.write_str("certificate or Keychain was not found"),
-            Self::InvalidOutput => f.write_str("invalid Keychain command output"),
-            Self::CommandFailed(message) => write!(f, "Keychain command failed: {message}"),
+            Self::Expired => f.write_str(&rust_i18n::t!("ca.expired_error")),
+            Self::PermissionDenied => f.write_str(&rust_i18n::t!("ca.authorization_error")),
+            Self::NotFound => f.write_str(&rust_i18n::t!("ca.not_found_error")),
+            Self::InvalidOutput => f.write_str(&rust_i18n::t!("ca.invalid_output_error")),
+            Self::CommandFailed(message) => {
+                write!(f, "{}: {message}", rust_i18n::t!("ca.keychain_error"))
+            }
         }
     }
 }
@@ -86,6 +90,14 @@ pub fn trust_ca(cert: &Path, expected: &str, target_keychain: &str) -> Result<(S
         proxy_fork_core::certificate_fingerprint(cert)? == expected,
         "certificate changed since confirmation"
     );
+    let bytes = fs_err::read(cert)?;
+    let certificate =
+        openssl::x509::X509::from_pem(&bytes).or_else(|_| openssl::x509::X509::from_der(&bytes))?;
+    let now = openssl::asn1::Asn1Time::days_from_now(0)?;
+    ensure!(
+        certificate.not_after().compare(&now)?.is_gt(),
+        KeychainError::Expired
+    );
     let keychain = keychain_path()?;
     ensure!(
         keychain == target_keychain,
@@ -125,6 +137,14 @@ pub fn remove_ca(cert: &Path, recorded: &str) -> Result<()> {
             Err(error)
         }
     })?;
+    // User trust survives deleting the Keychain item, so revoke it even on retries.
+    security_output(&["remove-trusted-cert".as_ref(), cert.as_os_str()]).or_else(|error| {
+        if error.downcast_ref::<KeychainError>() == Some(&KeychainError::NotFound) {
+            Ok(String::new())
+        } else {
+            Err(error)
+        }
+    })?;
     let Some(sha1) = matching_sha1(&certificates, recorded) else {
         return Ok(());
     };
@@ -153,6 +173,41 @@ fn matching_sha1(output: &str, sha256: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn expired_ca_is_rejected_before_keychain_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let cert = dir.path().join("expired.pem");
+        let config = proxy_fork_core::SelfSignedCaBuilder::default()
+            .validity_days(-1)
+            .build()
+            .unwrap();
+        let ca = proxy_fork_core::SelfSignedCa::gen_signed_cert(&config).unwrap();
+        fs_err::write(&cert, ca.certificate.pem()).unwrap();
+        let fingerprint = proxy_fork_core::certificate_fingerprint(&cert).unwrap();
+        let error = trust_ca(&cert, &fingerprint, "/unused-test-keychain").unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<KeychainError>(),
+            Some(&KeychainError::Expired)
+        );
+    }
+    #[test]
+    #[ignore = "requires an authorized CA fixture in PROXY_FORK_E2E_CA_CERT"]
+    fn removal_revokes_user_trust_without_a_keychain_item() {
+        let cert = std::path::PathBuf::from(
+            std::env::var_os("PROXY_FORK_E2E_CA_CERT").expect("set the authorized CA fixture path"),
+        );
+        let fingerprint = proxy_fork_core::certificate_fingerprint(&cert).unwrap();
+        remove_ca(&cert, &fingerprint).unwrap();
+        let output = std::process::Command::new("/usr/bin/security")
+            .args(["verify-cert", "-p", "ssl", "-c"])
+            .arg(&cert)
+            .output()
+            .unwrap();
+        assert!(
+            !output.status.success(),
+            "the removed CA must no longer be trusted"
+        );
+    }
     #[test]
     fn deletion_only_selects_the_matching_certificate() {
         let output = "SHA-256 hash: OTHER\nSHA-1 hash: 1111111111111111111111111111111111111111\nSHA-256 hash: OURS\nSHA-1 hash: 2222222222222222222222222222222222222222\n";

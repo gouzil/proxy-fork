@@ -365,8 +365,13 @@ impl Graphics {
         ] {
             self.remember(text);
         }
-        if let Some(error) = &app.error {
-            self.remember(error);
+        for message in app
+            .error
+            .iter()
+            .chain(app.error_dialog.iter())
+            .chain(app.notice.iter())
+        {
+            self.remember(message);
         }
         for draft in &app.rules {
             for text in [
@@ -493,7 +498,9 @@ impl Graphics {
         self.platform
             .prepare_frame(self.context.io_mut(), &self.window)?;
         let ui = self.context.frame();
+        let error_was_open = app.error_dialog.is_some();
         let actions = crate::view::draw(ui, app, logs, self.effective_theme);
+        let restore_dialog = error_was_open && app.error_dialog.is_none();
         let input_changed = input_needs_redraw(&mut self.input_state, ui);
         let (position, height) = IME_RECT.with(Cell::get);
         if !self.ime.preedit.is_empty() {
@@ -537,8 +544,9 @@ impl Graphics {
         frame.present();
         self.frames += 1;
         self.remember_app(app);
-        let settle_frame = std::mem::take(&mut self.settle_frame);
-        if self.font_dirty || settle_frame || input_changed {
+        // Returning to a modal needs a layout frame before it can be shown.
+        let settle_frame = std::mem::replace(&mut self.settle_frame, restore_dialog);
+        if self.font_dirty || settle_frame || input_changed || restore_dialog {
             self.window.request_redraw();
         }
         Ok(actions)

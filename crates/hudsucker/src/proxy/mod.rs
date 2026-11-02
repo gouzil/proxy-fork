@@ -158,6 +158,7 @@ where
                                     websocket_handler: websocket_handler.clone(),
                                     websocket_connector: websocket_connector.clone(),
                                     client_addr,
+                                    shutdown: guard.clone_weak(),
                                 }
                                 .proxy(req)
                             }),
@@ -169,7 +170,11 @@ where
                             conn = conn.as_mut() => conn,
                             _ = guard.cancelled() => {
                                 conn.as_mut().graceful_shutdown();
-                                conn.await
+                                // An unfinished response must not hold shutdown and system proxy restoration forever.
+                                match tokio::time::timeout(std::time::Duration::from_secs(2), conn).await {
+                                    Ok(result) => result,
+                                    Err(_) => return,
+                                }
                             }
                         } {
                             error!("Error serving connection: {}", err);

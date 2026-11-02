@@ -18,6 +18,7 @@ use hyper_util::{
 };
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 use tokio::{io::AsyncReadExt, net::TcpStream, task::JoinHandle};
+use tokio_graceful::WeakShutdownGuard;
 use tokio_rustls::TlsAcceptor;
 use tokio_tungstenite::{
     Connector, MaybeTlsStream, WebSocketStream,
@@ -39,11 +40,22 @@ fn bad_gateway() -> Response<Body> {
         .expect("Failed to build response")
 }
 
-fn spawn_with_trace<T: Send + Sync + 'static>(
-    fut: impl Future<Output = T> + Send + 'static,
+fn spawn_with_trace(
+    fut: impl Future<Output = ()> + Send + 'static,
     span: Span,
-) -> JoinHandle<T> {
-    tokio::spawn(fut.instrument(span))
+    shutdown: WeakShutdownGuard,
+) -> JoinHandle<()> {
+    let guard = shutdown.upgrade();
+    tokio::spawn(
+        async move {
+            tokio::select! {
+                biased;
+                _ = guard.cancelled() => {},
+                () = fut => {},
+            }
+        }
+        .instrument(span),
+    )
 }
 
 pub(crate) struct InternalProxy<C, CA, H, W> {
@@ -54,6 +66,7 @@ pub(crate) struct InternalProxy<C, CA, H, W> {
     pub websocket_handler: W,
     pub websocket_connector: Option<Connector>,
     pub client_addr: SocketAddr,
+    pub shutdown: WeakShutdownGuard,
 }
 
 impl<C, CA, H, W> Clone for InternalProxy<C, CA, H, W>
@@ -71,6 +84,7 @@ where
             websocket_handler: self.websocket_handler.clone(),
             websocket_connector: self.websocket_connector.clone(),
             client_addr: self.client_addr,
+            shutdown: self.shutdown.clone(),
         }
     }
 }
@@ -143,6 +157,7 @@ where
         match req.uri().authority().cloned() {
             Some(authority) => {
                 let span = info_span!("process_connect");
+                let shutdown = self.shutdown.clone();
                 let fut = async move {
                     match hyper::upgrade::on(&mut req).await {
                         Ok(upgraded) => {
@@ -235,7 +250,7 @@ where
                     };
                 };
 
-                spawn_with_trace(fut, span);
+                spawn_with_trace(fut, span, shutdown);
                 Response::new(Body::empty())
             }
             None => bad_request(),
@@ -273,6 +288,7 @@ where
             Ok((mut res, websocket)) => {
                 sync_websocket_subprotocol(res.headers_mut(), &upstream.1);
                 let span = info_span!("websocket");
+                let shutdown = self.shutdown.clone();
                 let fut = async move {
                     match websocket.await {
                         Ok(ws) => {
@@ -286,7 +302,7 @@ where
                     }
                 };
 
-                spawn_with_trace(fut, span);
+                spawn_with_trace(fut, span, shutdown);
                 res.map(Body::from)
             }
             Err(_) => bad_request(),
@@ -343,6 +359,7 @@ where
                 src: uri.clone(),
                 dst: self.client_addr,
             },
+            self.shutdown.clone(),
         );
 
         spawn_message_forwarder(
@@ -353,6 +370,7 @@ where
                 src: self.client_addr,
                 dst: uri,
             },
+            self.shutdown,
         );
 
         Ok(())
@@ -397,10 +415,11 @@ fn spawn_message_forwarder(
     sink: impl Sink<Message, Error = tungstenite::Error> + Unpin + Send + 'static,
     handler: impl WebSocketHandler,
     ctx: WebSocketContext,
+    shutdown: WeakShutdownGuard,
 ) {
     let span = info_span!("message_forwarder", context = ?ctx);
     let fut = handler.handle_websocket(ctx, stream, sink);
-    spawn_with_trace(fut, span);
+    spawn_with_trace(fut, span, shutdown);
 }
 
 fn websocket_request(req: Request<Body>) -> Result<Request<()>, ()> {

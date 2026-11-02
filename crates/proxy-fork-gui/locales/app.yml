@@ -184,6 +184,46 @@
     "en": "Operation failed; details:",
     "zh-CN": "操作失败，详情："
   },
+  "feedback.error_title": {
+    "en": "Operation failed",
+    "zh-CN": "操作未完成"
+  },
+  "feedback.dismiss": {
+    "en": "Got it",
+    "zh-CN": "知道了"
+  },
+  "ca.expired_error": {
+    "en": "This CA certificate has expired. Installing trust cannot renew it.\nIn Certificate management, open Advanced / destructive actions:\n1. Authorize the Keychain change and remove the recorded certificate.\n2. Confirm overwriting and regenerate the CA files.\n3. Install trust for the new CA.",
+    "zh-CN": "CA 证书已过期，重新安装信任无法续期。\n请在证书管理的“高级 / 危险操作”中：\n1. 勾选钥匙串授权，移除已记录的旧证书。\n2. 确认覆盖，重新生成 CA 文件。\n3. 为新证书安装信任。"
+  },
+  "ca.authorization_error": {
+    "en": "Keychain authorization was denied or cancelled. Retry the operation and complete authorization in the macOS dialog.",
+    "zh-CN": "钥匙串授权被拒绝或取消。请重试此操作，并在 macOS 系统弹窗中完成授权。"
+  },
+  "ca.not_found_error": {
+    "en": "The certificate or Keychain was not found. Check the certificate path, then refresh its status.",
+    "zh-CN": "未找到证书或钥匙串。请检查证书路径，然后刷新证书状态。"
+  },
+  "ca.invalid_output_error": {
+    "en": "The Keychain response could not be read. Refresh the certificate status and retry.",
+    "zh-CN": "无法读取钥匙串返回的结果。请刷新证书状态后重试。"
+  },
+  "ca.keychain_error": {
+    "en": "The Keychain operation failed",
+    "zh-CN": "钥匙串操作未完成，系统返回"
+  },
+  "ca.generated": {
+    "en": "CA files generated. Install trust for the new certificate.",
+    "zh-CN": "CA 文件已生成，请为新证书安装信任。"
+  },
+  "ca.trust_installed": {
+    "en": "CA trust installed and verified.",
+    "zh-CN": "证书信任已安装并验证。"
+  },
+  "ca.removed": {
+    "en": "Recorded CA trust removed. You can now regenerate the CA files.",
+    "zh-CN": "旧证书信任已移除，现在可以重新生成 CA 文件。"
+  },
   "proxy.host": {
     "en": "Listen host",
     "zh-CN": "监听主机"
@@ -480,9 +520,13 @@
     "en": "Advanced / destructive actions",
     "zh-CN": "高级 / 危险操作"
   },
-  "ca.danger_hint": {
-    "en": "Replacing the CA invalidates existing trust. Remove this app's recorded trust first. Removal also requires the authorization above.",
-    "zh-CN": "覆盖 CA 会使已有信任失效，请先移除本应用记录的信任。移除同样需要勾选上方授权。"
+  "ca.remove_before_regenerate": {
+    "en": "Regeneration is unavailable: the old CA trust is still recorded.\n1. Select \"I understand and authorize the Keychain change\".\n2. Click \"Remove this app's recorded certificate\" and complete system authorization.\nAfter removal succeeds, confirm overwriting and regenerate.",
+    "zh-CN": "暂时无法重新生成：旧 CA 的信任记录仍在。\n1. 勾选“我了解并授权修改钥匙串”。\n2. 点击“移除本应用记录的证书”，完成系统授权。\n移除成功后，再确认覆盖并重新生成。"
+  },
+  "ca.regenerate_hint": {
+    "en": "To replace the certificate and private key, select the overwrite confirmation below, then click \"Regenerate CA files\". Afterwards, install trust for the new CA.",
+    "zh-CN": "重新生成会替换证书和私钥。请勾选下方“我确认覆盖已有 CA 文件”，再点击“重新生成 CA 文件”；生成后需要重新安装信任。"
   },
   "ca.regenerate": {
     "en": "Regenerate CA files",

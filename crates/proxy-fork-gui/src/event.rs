@@ -16,6 +16,7 @@ pub enum Outcome {
     Certificate(GeneratedCa, Option<String>),
     CaNotConfigured(Option<String>),
     Trust {
+        notice: &'static str,
         fingerprint: String,
         trusted: bool,
         recorded: Option<String>,
