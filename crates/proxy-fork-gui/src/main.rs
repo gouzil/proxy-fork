@@ -176,12 +176,25 @@ impl Desktop {
                         );
                         let cert = cert.context("no certificate directory")?;
                         let key = key.context("no private key directory")?;
-                        let (generated, keychain) = tokio::task::spawn_blocking(move || {
+                        let (generated, keychain, info) = tokio::task::spawn_blocking(move || {
                             let generated = proxy_fork_core::generate_ca(&cert, &key, overwrite)?;
-                            Ok::<_, anyhow::Error>((generated, platform::keychain_path().ok()))
+                            let info = proxy_fork_core::certificate_info(&cert)?;
+                            anyhow::ensure!(
+                                info.fingerprint == generated.fingerprint,
+                                "{}",
+                                proxy_fork_gui::_rust_i18n_translate(
+                                    &rust_i18n::locale(),
+                                    "ca.changed_during_inspection"
+                                )
+                            );
+                            Ok::<_, anyhow::Error>((
+                                generated,
+                                platform::keychain_path().ok(),
+                                info,
+                            ))
                         })
                         .await??;
-                        Ok(Outcome::Certificate(generated, keychain))
+                        Ok(Outcome::Certificate(generated, keychain, info))
                     }
                     Action::InspectCa => {
                         let cert = cert.context("no certificate directory")?;
@@ -193,6 +206,15 @@ impl Desktop {
                             else {
                                 return Ok(Outcome::CaNotConfigured(recorded));
                             };
+                            let info = proxy_fork_core::certificate_info(&cert)?;
+                            anyhow::ensure!(
+                                info.fingerprint == fingerprint,
+                                "{}",
+                                proxy_fork_gui::_rust_i18n_translate(
+                                    &rust_i18n::locale(),
+                                    "ca.changed_during_inspection"
+                                )
+                            );
                             Ok::<_, anyhow::Error>(Outcome::Trust {
                                 notice: if trusted {
                                     "ca.trusted"
@@ -203,6 +225,7 @@ impl Desktop {
                                 trusted,
                                 recorded,
                                 keychain: platform::keychain_path().ok(),
+                                info: Some(info),
                             })
                         })
                         .await?
@@ -235,6 +258,7 @@ impl Desktop {
                             trusted,
                             recorded,
                             keychain: Some(keychain),
+                            info: None,
                         })
                     }
                     Action::RemoveCa => {
@@ -257,6 +281,7 @@ impl Desktop {
                             trusted: false,
                             recorded: None,
                             keychain: target_keychain,
+                            info: None,
                         })
                     }
                     Action::EnableAutostart | Action::DisableAutostart => {
@@ -379,11 +404,12 @@ impl Desktop {
                     Outcome::Preferences => {
                         message = "state.saved";
                     }
-                    Outcome::Certificate(ca, keychain) => {
+                    Outcome::Certificate(ca, keychain, info) => {
                         message = "ca.generated";
                         self.app.cert_path = ca.cert_path.display().to_string();
                         self.app.key_path = ca.key_path.display().to_string();
                         self.app.ca_fingerprint = Some(ca.fingerprint);
+                        self.app.ca_info = Some(info);
                         self.app.ca_keychain = keychain;
                         self.app.ca_trusted = Some(false);
                         self.app.ca_missing = false;
@@ -401,9 +427,13 @@ impl Desktop {
                         trusted,
                         recorded,
                         keychain,
+                        info,
                     } => {
                         message = notice;
                         self.app.ca_fingerprint = Some(fingerprint.clone());
+                        if let Some(info) = info {
+                            self.app.ca_info = Some(info);
+                        }
                         self.app.ca_keychain = keychain;
                         self.app.ca_trusted = Some(trusted);
                         self.app.ca_missing = false;

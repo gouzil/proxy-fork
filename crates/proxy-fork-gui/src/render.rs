@@ -365,6 +365,11 @@ impl Graphics {
         ] {
             self.remember(text);
         }
+        if let Some(info) = &app.ca_info {
+            for text in [&info.subject, &info.issuer, &info.serial_number] {
+                self.remember(text);
+            }
+        }
         for message in app
             .error
             .iter()

@@ -95,6 +95,7 @@ pub struct App {
     pub ca_confirm: bool,
     pub ca_overwrite: bool,
     pub ca_fingerprint: Option<String>,
+    pub ca_info: Option<proxy_fork_core::CertificateInfo>,
     pub ca_keychain: Option<String>,
     pub ca_trusted: Option<bool>,
     pub ca_missing: bool,
@@ -167,6 +168,7 @@ impl App {
             ca_confirm: false,
             ca_overwrite: false,
             ca_fingerprint: None,
+            ca_info: None,
             ca_keychain: None,
             ca_trusted: None,
             ca_missing: false,
@@ -346,6 +348,7 @@ impl App {
         }
         if action == Action::InspectCa {
             self.ca_fingerprint = None;
+            self.ca_info = None;
             self.ca_keychain = None;
             self.ca_trusted = None;
             self.ca_confirm = false;
@@ -414,6 +417,7 @@ impl App {
     }
     pub fn ca_not_configured(&mut self, recorded: Option<String>) {
         self.ca_fingerprint = None;
+        self.ca_info = None;
         self.ca_keychain = None;
         self.ca_trusted = None;
         self.ca_missing = true;

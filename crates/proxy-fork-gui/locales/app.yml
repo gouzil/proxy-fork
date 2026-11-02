@@ -540,6 +540,46 @@
     "en": "I confirm overwriting the existing CA files",
     "zh-CN": "我确认覆盖已有 CA 文件"
   },
+  "ca.subject": {
+    "en": "Subject",
+    "zh-CN": "证书主体"
+  },
+  "ca.issuer": {
+    "en": "Issuer",
+    "zh-CN": "签发者"
+  },
+  "ca.serial_number": {
+    "en": "Serial number",
+    "zh-CN": "序列号"
+  },
+  "ca.not_before": {
+    "en": "Valid from (UTC)",
+    "zh-CN": "生效时间（UTC）"
+  },
+  "ca.not_after": {
+    "en": "Expires (UTC)",
+    "zh-CN": "到期时间（UTC）"
+  },
+  "ca.validity": {
+    "en": "Validity",
+    "zh-CN": "有效期状态"
+  },
+  "ca.valid": {
+    "en": "Valid",
+    "zh-CN": "有效期内"
+  },
+  "ca.expired": {
+    "en": "Expired",
+    "zh-CN": "已过期"
+  },
+  "ca.not_yet_valid": {
+    "en": "Not yet valid",
+    "zh-CN": "尚未生效"
+  },
+  "ca.changed_during_inspection": {
+    "en": "The certificate changed while it was being read. Refresh to load the current certificate.",
+    "zh-CN": "读取期间证书已发生变化，请刷新以加载当前证书。"
+  },
   "ca.fingerprint": {
     "en": "SHA-256 fingerprint",
     "zh-CN": "SHA-256 指纹"

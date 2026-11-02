@@ -246,6 +246,36 @@ pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
         ui.dummy([0.0, 2.0]);
         text(ui, "ca.info_group");
         ui.separator();
+        if let Some(info) = &app.ca_info {
+            let now = time::OffsetDateTime::now_utc();
+            let validity = if now < info.not_before {
+                "ca.not_yet_valid"
+            } else if now >= info.not_after {
+                "ca.expired"
+            } else {
+                "ca.valid"
+            };
+            let date = |value: time::OffsetDateTime| {
+                value
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_else(|_| value.to_string())
+            };
+            let not_before = date(info.not_before);
+            let not_after = date(info.not_after);
+            let value_x = ui.cursor_pos()[0] + 148.0;
+            for (key, value) in [
+                ("ca.subject", info.subject.as_str()),
+                ("ca.issuer", info.issuer.as_str()),
+                ("ca.serial_number", info.serial_number.as_str()),
+                ("ca.not_before", not_before.as_str()),
+                ("ca.not_after", not_after.as_str()),
+                ("ca.validity", rust_i18n::t!(validity).as_ref()),
+            ] {
+                muted(ui, key);
+                ui.same_line_with_pos(value_x);
+                ui.text_wrapped(value);
+            }
+        }
         let default_path = rust_i18n::t!("dashboard.default_path");
         information(
             ui,
