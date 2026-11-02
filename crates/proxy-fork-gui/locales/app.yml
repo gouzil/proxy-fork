@@ -501,8 +501,8 @@
     "zh-CN": "此 CA 用于 HTTPS 拦截。仅用于你有权代理的流量，私钥保留在本地。"
   },
   "ca.status_group": {
-    "en": "Certificate status",
-    "zh-CN": "证书状态"
+    "en": "Trust status",
+    "zh-CN": "信任状态"
   },
   "ca.info_group": {
     "en": "Certificate information",

@@ -217,11 +217,16 @@ pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
     muted(ui, "ca.description");
     ui.child_window("ca-sections").size([0.0, -48.0]).build(|| {
         let _disabled = ui.begin_disabled(app.busy);
-        text(ui, "ca.status_group");
+        ui.align_text_to_frame_padding();
+        text(ui, "ca.info_group");
         ui.same_line_with_pos(ui.window_content_region_max()[0] - 88.0);
         if ui.button_with_size(label("action.refresh", "inspect-ca"), [88.0, 28.0]) {
             actions.push(Action::InspectCa);
         }
+        ui.separator();
+        let value_x = ui.cursor_pos()[0] + 148.0;
+        muted(ui, "ca.status_group");
+        ui.same_line_with_pos(value_x);
         text(
             ui,
             if app.ca_missing {
@@ -243,9 +248,6 @@ pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
             actions.push(Action::GenerateCa);
         }
 
-        ui.dummy([0.0, 2.0]);
-        text(ui, "ca.info_group");
-        ui.separator();
         if let Some(info) = &app.ca_info {
             let now = time::OffsetDateTime::now_utc();
             let validity = if now < info.not_before {
@@ -262,7 +264,6 @@ pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
             };
             let not_before = date(info.not_before);
             let not_after = date(info.not_after);
-            let value_x = ui.cursor_pos()[0] + 148.0;
             for (key, value) in [
                 ("ca.subject", info.subject.as_str()),
                 ("ca.issuer", info.issuer.as_str()),

@@ -678,7 +678,7 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         app.ca_keychain = Some("/test/login.keychain-db".into());
         app.ca_trusted = Some(false);
         app.preferences.trusted_fingerprint = app.ca_fingerprint.clone();
-        let offset = if locale == "en" { 0.0 } else { -13.0 };
+        let offset = if locale == "en" { -35.0 } else { -48.0 };
         for _ in 0..4 {
             frame(&mut context, &mut app);
         }
@@ -710,9 +710,9 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         if locale == "en" {
             // Other platforms show an extra unsupported-feature hint above this section.
             let danger_y = if cfg!(target_os = "macos") {
-                568.0
+                533.0
             } else {
-                591.0
+                556.0
             };
             assert!(click(&mut context, &mut app, [250.0, danger_y]).is_empty());
         }
