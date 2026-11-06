@@ -6,6 +6,7 @@ pub mod logging;
 pub mod platform;
 pub mod preferences;
 pub mod render;
+pub mod rule_import;
 pub mod updater;
 pub mod view;
 

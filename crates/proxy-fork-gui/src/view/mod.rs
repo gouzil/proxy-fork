@@ -239,6 +239,9 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
     if app.error_dialog.is_some() {
         // Only one root modal may own focus; keep workflow flags for the return path.
         feedback::error_dialog(ui, app);
+    } else if app.rule_import_dialog {
+        rules::import_dialog(ui, app, &mut actions);
+        feedback::toast(ui, app);
     } else {
         rules::editor(ui, app);
         dashboard::certificate_dialog(ui, app, &mut actions);

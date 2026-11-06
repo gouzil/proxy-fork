@@ -268,6 +268,30 @@
     "en": "Add rule",
     "zh-CN": "新增规则"
   },
+  "rules.import": {
+    "en": "Import rules",
+    "zh-CN": "导入规则"
+  },
+  "rules.import_hint": {
+    "en": "Drop TOML files into this window, or enter a local file path / HTTP(S) URL. Imported rules are appended and saved immediately.",
+    "zh-CN": "将 TOML 文件拖入窗口，或输入本地文件路径 / HTTP(S) 地址。导入规则会追加到列表并立即保存。"
+  },
+  "rules.import_source": {
+    "en": "File path or online address",
+    "zh-CN": "文件路径或在线地址"
+  },
+  "rules.import_clear": {
+    "en": "Clear files and enter an address",
+    "zh-CN": "清除文件，改用路径或地址"
+  },
+  "rules.imported": {
+    "en": "Rules imported and saved",
+    "zh-CN": "规则已导入并保存"
+  },
+  "rules.import_busy": {
+    "en": "Wait for the current operation to finish, then drop the rules file again.",
+    "zh-CN": "请等待当前操作完成后，再拖入规则文件。"
+  },
   "rules.remove": {
     "en": "Delete",
     "zh-CN": "删除"
@@ -321,8 +345,8 @@
     "zh-CN": "还没有转发规则"
   },
   "rules.empty_hint": {
-    "en": "Use Add rule to set up your first forwarding target.",
-    "zh-CN": "点击「新增规则」，配置第一个转发目标。"
+    "en": "Add a rule, import from an address, or drop a TOML file here.",
+    "zh-CN": "新增规则、从地址导入，或将 TOML 文件拖入窗口。"
   },
   "rules.edit": {
     "en": "Edit rule",

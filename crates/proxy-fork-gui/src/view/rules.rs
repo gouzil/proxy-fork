@@ -1,5 +1,5 @@
 use super::{dialog, label, muted, primary_button, text, tooltip};
-use crate::app::{App, RuleDraft};
+use crate::app::{Action, App, RuleDraft};
 use imgui::{Key, StyleColor, StyleVar, Ui};
 
 fn field(ui: &Ui, key: &str, id: &str, value: &mut String, decimal: bool) -> bool {
@@ -52,6 +52,10 @@ pub fn draw(ui: &Ui, app: &mut App) {
     if primary_button(ui, label("rules.add", "add-rule"), [112.0, 34.0]) {
         app.add_rule();
         app.rule_editor = app.rules.last().map(|rule| rule.id);
+    }
+    ui.same_line_with_spacing(0.0, 10.0);
+    if ui.button_with_size(label("rules.import", "import-rules"), [112.0, 34.0]) {
+        app.rule_import_dialog = true;
     }
     ui.set_cursor_pos([origin[0], origin[1] + 66.0]);
     if app.rules.is_empty() {
@@ -162,6 +166,67 @@ pub fn draw(ui: &Ui, app: &mut App) {
     } else if let Some((a, b)) = swap {
         app.rules.swap(a, b);
         app.request_rules_save();
+    }
+}
+
+pub fn import_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
+    if !app.rule_import_dialog {
+        return;
+    }
+    let Some(_dialog) = dialog(ui, "rules.import", "rule-import", [600.0, 340.0]) else {
+        return;
+    };
+    let _spacing = ui.push_style_var(StyleVar::ItemSpacing([10.0, 10.0]));
+    let _disabled = ui.begin_disabled(app.busy || app.exiting);
+    ui.set_window_font_scale(1.2);
+    text(ui, "rules.import");
+    ui.set_window_font_scale(1.0);
+    let mut submit = false;
+    ui.child_window("rule-import-fields")
+        .size([0.0, -54.0])
+        .build(|| {
+            muted(ui, "rules.import_hint");
+            if app.rule_import_files.is_empty() {
+                muted(ui, "rules.import_source");
+                ui.set_next_item_width(-1.0);
+                submit = ui
+                    .input_text("###rule-import-source", &mut app.rule_import_source)
+                    .hint("https://example.com/rules.toml")
+                    .enter_returns_true(true)
+                    .build();
+            } else {
+                ui.child_window("rule-import-files")
+                    .size([0.0, 72.0])
+                    .build(|| {
+                        for path in &app.rule_import_files {
+                            ui.text_wrapped(path.display().to_string());
+                        }
+                    });
+                if ui.button(label("rules.import_clear", "clear-import-files")) {
+                    app.rule_import_files.clear();
+                }
+            }
+            if app.busy {
+                muted(ui, "state.working");
+            }
+        });
+    let max = ui.window_content_region_max();
+    ui.set_cursor_pos([max[0] - 218.0, max[1] - 34.0]);
+    let cancel = ui.button_with_size(label("action.close", "cancel-import"), [96.0, 34.0]);
+    ui.same_line_with_spacing(0.0, 10.0);
+    let ready = !app.rule_import_files.is_empty() || !app.rule_import_source.trim().is_empty();
+    {
+        let _empty = ui.begin_disabled(!ready);
+        submit |= primary_button(ui, label("rules.import", "submit-import"), [112.0, 34.0]);
+    }
+    if !app.busy && !app.exiting {
+        if cancel || ui.is_key_pressed(Key::Escape) {
+            app.rule_import_dialog = false;
+            app.rule_import_files.clear();
+            ui.close_current_popup();
+        } else if submit && ready {
+            actions.push(Action::ImportRules);
+        }
     }
 }
 
