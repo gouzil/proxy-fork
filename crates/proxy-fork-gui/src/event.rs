@@ -12,6 +12,7 @@ pub enum Outcome {
     Done(&'static str),
     Saved(Option<String>, AppConfig),
     RulesSaved(Vec<RuleItem>),
+    RulesImported(Vec<RuleItem>),
     Preferences,
     Certificate(GeneratedCa, Option<String>, CertificateInfo),
     CaNotConfigured(Option<String>),

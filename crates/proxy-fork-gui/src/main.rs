@@ -7,7 +7,7 @@ use proxy_fork_gui::{
     platform,
     preferences::Preferences,
     render::Graphics,
-    updater,
+    rule_import, updater,
 };
 use std::{
     path::PathBuf,
@@ -86,7 +86,7 @@ impl Desktop {
         } else {
             None
         };
-        let rules = if action == Action::SaveRules {
+        let rules = if matches!(action, Action::SaveRules | Action::ImportRules) {
             match self.app.edited_rules() {
                 Ok(rules) => Some(rules),
                 Err(error) => {
@@ -130,9 +130,22 @@ impl Desktop {
         let overwrite = self.app.ca_overwrite;
         let release = self.release.clone();
         let downloaded = self.downloaded.clone();
+        let import_source = self.app.rule_import_source.clone();
+        let import_files = self.app.rule_import_files.clone();
         self.runtime.spawn(async move {
             let result: Result<Outcome> = async {
                 match action {
+                    Action::ImportRules => {
+                        let mut rules = rules.context("missing rules")?;
+                        let imported = if import_files.is_empty() {
+                            rule_import::load_source(&import_source).await?
+                        } else {
+                            rule_import::load_files(import_files).await?
+                        };
+                        rules.extend(imported);
+                        service.save_rules(rules.clone(), config_path).await?;
+                        Ok(Outcome::RulesImported(rules))
+                    }
                     Action::Start => {
                         service
                             .start(config.context("missing start configuration")?)
@@ -401,6 +414,10 @@ impl Desktop {
                         message = "state.saved";
                         self.app.rules_saved(rules);
                     }
+                    Outcome::RulesImported(rules) => {
+                        message = "rules.imported";
+                        self.app.rules_imported(rules);
+                    }
                     Outcome::Preferences => {
                         message = "state.saved";
                     }
@@ -569,6 +586,18 @@ impl ApplicationHandler<AppEvent> for Desktop {
             graphics.event(event.clone());
         }
         match event {
+            WindowEvent::DroppedFile(path) => {
+                if !self.app.drop_rule_file(path) {
+                    self.app.report_error(
+                        proxy_fork_gui::_rust_i18n_translate(
+                            &rust_i18n::locale(),
+                            "rules.import_busy",
+                        )
+                        .into_owned(),
+                    );
+                }
+                self.request_redraw();
+            }
             WindowEvent::CloseRequested => {
                 self.app.request_config_save();
                 if let Some(action) = self.app.queued_action() {

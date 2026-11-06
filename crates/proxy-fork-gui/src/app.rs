@@ -12,6 +12,7 @@ pub enum Action {
     Stop,
     Save,
     SaveRules,
+    ImportRules,
     SavePreferences,
     GenerateCa,
     InspectCa,
@@ -86,6 +87,9 @@ pub struct App {
     pub rules: Vec<RuleDraft>,
     pub rules_dirty: bool,
     pub rule_editor: Option<u64>,
+    pub rule_import_dialog: bool,
+    pub rule_import_source: String,
+    pub rule_import_files: Vec<std::path::PathBuf>,
     pub listen_port: String,
     pub cache_size: String,
     pub cert_path: String,
@@ -160,6 +164,9 @@ impl App {
             rules,
             rules_dirty: false,
             rule_editor: None,
+            rule_import_dialog: false,
+            rule_import_source: String::new(),
+            rule_import_files: Vec::new(),
             next_rule_id,
             saving_rules: false,
             saving_config: false,
@@ -220,6 +227,26 @@ impl App {
         cfg.proxy_manager.rules = self.edited_rules()?;
         cfg.validate()?;
         Ok(cfg)
+    }
+    pub fn drop_rule_file(&mut self, path: std::path::PathBuf) -> bool {
+        if self.busy || self.exiting {
+            return false;
+        }
+        self.rule_import_files.push(path);
+        self.rule_import_dialog = true;
+        self.page = Page::Rules;
+        true
+    }
+    pub fn rules_imported(&mut self, rules: Vec<RuleItem>) {
+        for rule in rules.iter().skip(self.rules.len()) {
+            self.rules
+                .push(RuleDraft::new(self.next_rule_id, rule.clone()));
+            self.next_rule_id += 1;
+        }
+        self.rules_saved(rules);
+        self.rule_import_dialog = false;
+        self.rule_import_source.clear();
+        self.rule_import_files.clear();
     }
     pub fn edited_settings(&self) -> Result<AppConfig> {
         let mut cfg = self.config.clone();
