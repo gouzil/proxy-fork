@@ -5,6 +5,47 @@ use proxy_fork_gui::{
 };
 
 #[test]
+fn feedback_keeps_unacknowledged_errors_through_background_saves() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.finish(Err("CA expired".into()));
+    app.begin(Action::Save).unwrap();
+    app.finish(Ok("state.saved".into()));
+    assert_eq!(app.error_dialog.as_deref(), Some("CA expired"));
+    app.report_error("authorization cancelled".into());
+    assert_eq!(app.error_dialog.as_deref(), Some("authorization cancelled"));
+    assert!(app.notice.is_none() && app.notice_deadline.is_none());
+}
+
+#[test]
+fn success_toast_expires_without_another_user_action() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.finish(Ok("ca.generated".into()));
+    let deadline = app
+        .notice_deadline
+        .expect("a visible toast needs a redraw deadline");
+    app.expire_notice(deadline - std::time::Duration::from_millis(1));
+    assert_eq!(app.notice.as_deref(), Some("ca.generated"));
+    app.expire_notice(deadline);
+    assert!(app.notice.is_none() && app.notice_deadline.is_none());
+}
+
+#[test]
+fn ca_success_toast_survives_the_following_configuration_autosave() {
+    let mut app = App::new(AppConfig::default(), Preferences::default());
+    app.finish(Ok("ca.generated".into()));
+    let deadline = app.notice_deadline;
+    for action in [Action::Save, Action::SaveRules, Action::SavePreferences] {
+        app.begin(action).unwrap();
+        app.finish(Ok("state.saved".into()));
+        assert_eq!(app.notice.as_deref(), Some("ca.generated"));
+        assert_eq!(app.notice_deadline, deadline);
+    }
+    app.expire_notice(deadline.unwrap());
+    app.finish(Ok("state.saved".into()));
+    assert_eq!(app.notice.as_deref(), Some("state.saved"));
+}
+
+#[test]
 fn tray_dashboard_navigation_returns_to_dashboard() {
     let mut app = App::new(AppConfig::default(), Preferences::default());
     app.page = Page::Logs;

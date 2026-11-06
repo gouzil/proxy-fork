@@ -5,6 +5,7 @@ use crate::{
 use imgui::{Condition, StyleColor, StyleVar, Ui};
 use proxy_fork_core::proxy_service::ProxyServiceState;
 pub mod dashboard;
+mod feedback;
 pub mod logs;
 pub mod rules;
 pub mod settings;
@@ -205,9 +206,8 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
                         muted(ui, "state.working");
                     }
                     for error in app
-                        .error
+                        .rule_save_error
                         .iter()
-                        .chain(app.rule_save_error.iter())
                         .chain(app.config_save_error.iter())
                     {
                         let _error = ui.push_style_color(
@@ -220,9 +220,6 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
                         );
                         text(ui, "state.error");
                         ui.text_wrapped(error);
-                    }
-                    if let Some(notice) = &app.notice {
-                        text(ui, notice);
                     }
                     let _background = ui.push_style_color(StyleColor::ChildBg, [0.0; 4]);
                     let _rounding = ui.push_style_var(StyleVar::ChildRounding(10.0));
@@ -239,9 +236,15 @@ pub fn draw(ui: &Ui, app: &mut App, log: &LogBuffer, theme: winit::window::Theme
         });
     drop(_spacing);
     drop(_padding);
-    rules::editor(ui, app);
-    dashboard::certificate_dialog(ui, app, &mut actions);
-    settings::update_dialog(ui, app, &mut actions);
-    logs::details(ui, app);
+    if app.error_dialog.is_some() {
+        // Only one root modal may own focus; keep workflow flags for the return path.
+        feedback::error_dialog(ui, app);
+    } else {
+        rules::editor(ui, app);
+        dashboard::certificate_dialog(ui, app, &mut actions);
+        settings::update_dialog(ui, app, &mut actions);
+        logs::details(ui, app);
+        feedback::toast(ui, app);
+    }
     actions
 }

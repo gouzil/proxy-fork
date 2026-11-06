@@ -257,12 +257,12 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
                 frame(&mut context, &mut app);
             }
             for (y, expected) in [
-                (235.0, Action::InspectAutostart),
-                (258.0, Action::EnableAutostart),
-                (281.0, Action::DisableAutostart),
+                (189.0, Action::InspectAutostart),
+                (212.0, Action::EnableAutostart),
+                (235.0, Action::DisableAutostart),
             ] {
                 assert!(
-                    click(&mut context, &mut app, [521.0, 212.0]).is_empty(),
+                    click(&mut context, &mut app, [521.0, 166.0]).is_empty(),
                     "an inspection error must offer explicit recovery, not repeat the failed read"
                 );
                 assert_eq!(
@@ -678,7 +678,7 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         app.ca_keychain = Some("/test/login.keychain-db".into());
         app.ca_trusted = Some(false);
         app.preferences.trusted_fingerprint = app.ca_fingerprint.clone();
-        let offset = if locale == "en" { 0.0 } else { -13.0 };
+        let offset = if locale == "en" { -35.0 } else { -48.0 };
         for _ in 0..4 {
             frame(&mut context, &mut app);
         }
@@ -710,9 +710,9 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         if locale == "en" {
             // Other platforms show an extra unsupported-feature hint above this section.
             let danger_y = if cfg!(target_os = "macos") {
-                568.0
+                533.0
             } else {
-                591.0
+                556.0
             };
             assert!(click(&mut context, &mut app, [250.0, danger_y]).is_empty());
         }
@@ -721,16 +721,13 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         for _ in 0..4 {
             frame(&mut context, &mut app);
         }
-        app.preferences.trusted_fingerprint = None;
-        assert!(click(&mut context, &mut app, [200.0, 510.0]).is_empty());
-        assert!(app.ca_overwrite, "overwriting remains an explicit checkbox");
-        assert_eq!(
-            click(&mut context, &mut app, [250.0, 545.0]),
-            vec![Action::GenerateCa]
+        app.ca_overwrite = true;
+        assert!(
+            click(&mut context, &mut app, [250.0, 585.0]).is_empty(),
+            "regeneration must stay disabled until the recorded trust is removed"
         );
-        app.preferences.trusted_fingerprint = app.ca_fingerprint.clone();
         assert_eq!(
-            click(&mut context, &mut app, [240.0, 585.0]),
+            click(&mut context, &mut app, [240.0, 510.0]),
             if cfg!(target_os = "macos") {
                 vec![Action::RemoveCa]
             } else {
@@ -740,22 +737,42 @@ fn sidebar_navigation_preserves_drafts_and_keeps_page_scroll_independent() {
         );
         app.preferences.trusted_fingerprint = Some("another certificate".into());
         assert!(
-            click(&mut context, &mut app, [240.0, 585.0]).is_empty(),
+            click(&mut context, &mut app, [240.0, 510.0]).is_empty(),
             "never remove an unowned fingerprint"
         );
         app.preferences.trusted_fingerprint = app.ca_fingerprint.clone();
         app.ca_confirm = false;
         assert!(
-            click(&mut context, &mut app, [240.0, 585.0]).is_empty(),
+            click(&mut context, &mut app, [240.0, 510.0]).is_empty(),
             "removal still requires explicit authorization"
         );
         app.ca_confirm = true;
+        app.ca_overwrite = false;
+        app.preferences.trusted_fingerprint = None;
+        for _ in 0..4 {
+            frame(&mut context, &mut app);
+        }
+        context.io_mut().add_mouse_pos_event([650.0, 530.0]);
+        context.io_mut().add_mouse_wheel_event([0.0, -30.0]);
+        for _ in 0..4 {
+            frame(&mut context, &mut app);
+        }
+        assert!(
+            click(&mut context, &mut app, [250.0, 585.0]).is_empty(),
+            "regeneration must require explicit overwrite confirmation"
+        );
+        assert!(click(&mut context, &mut app, [200.0, 550.0]).is_empty());
+        assert!(app.ca_overwrite, "overwriting remains an explicit checkbox");
+        assert_eq!(
+            click(&mut context, &mut app, [250.0, 585.0]),
+            vec![Action::GenerateCa]
+        );
         app.busy = true;
         for _ in 0..4 {
             frame(&mut context, &mut app);
         }
-        assert!(click(&mut context, &mut app, [240.0, 585.0]).is_empty());
-        assert!(click(&mut context, &mut app, [250.0, 545.0]).is_empty());
+        assert!(click(&mut context, &mut app, [240.0, 510.0]).is_empty());
+        assert!(click(&mut context, &mut app, [250.0, 585.0]).is_empty());
         assert!(click(&mut context, &mut app, [700.0, 630.0]).is_empty());
         assert!(!app.ca_dialog);
         assert!(

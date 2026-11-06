@@ -3,7 +3,7 @@ use crate::{
     updater::{Release, VerifiedUpdate},
 };
 use proxy_fork_core::{
-    GeneratedCa,
+    CertificateInfo, GeneratedCa,
     app_config::{AppConfig, RuleItem},
     proxy_service::ProxyServiceState,
 };
@@ -13,13 +13,15 @@ pub enum Outcome {
     Saved(Option<String>, AppConfig),
     RulesSaved(Vec<RuleItem>),
     Preferences,
-    Certificate(GeneratedCa, Option<String>),
+    Certificate(GeneratedCa, Option<String>, CertificateInfo),
     CaNotConfigured(Option<String>),
     Trust {
+        notice: &'static str,
         fingerprint: String,
         trusted: bool,
         recorded: Option<String>,
         keychain: Option<String>,
+        info: Option<CertificateInfo>,
     },
     Autostart(bool),
     Update(Option<Release>),

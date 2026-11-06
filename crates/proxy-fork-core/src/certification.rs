@@ -23,6 +23,35 @@ pub struct GeneratedCa {
     pub fingerprint: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertificateInfo {
+    pub subject: String,
+    pub issuer: String,
+    pub serial_number: String,
+    pub not_before: OffsetDateTime,
+    pub not_after: OffsetDateTime,
+    pub fingerprint: String,
+}
+
+pub fn certificate_info(path: &std::path::Path) -> anyhow::Result<CertificateInfo> {
+    let bytes = fs_err::read(path)?;
+    let certificate = X509::from_pem(&bytes).or_else(|_| X509::from_der(&bytes))?;
+    let der = certificate.to_der()?;
+    let (_, parsed) = parse_x509_certificate(&der).map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(CertificateInfo {
+        subject: parsed.subject().to_string(),
+        issuer: parsed.issuer().to_string(),
+        serial_number: parsed.raw_serial_as_string(),
+        not_before: parsed.validity().not_before.to_datetime(),
+        not_after: parsed.validity().not_after.to_datetime(),
+        fingerprint: certificate
+            .digest(MessageDigest::sha256())?
+            .iter()
+            .map(|byte| format!("{byte:02X}"))
+            .collect(),
+    })
+}
+
 pub fn certificate_fingerprint(path: &std::path::Path) -> anyhow::Result<String> {
     let bytes = fs_err::read(path)?;
     let cert = X509::from_pem(&bytes).or_else(|_| X509::from_der(&bytes))?;

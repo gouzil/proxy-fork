@@ -216,16 +216,17 @@ pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
     ui.set_window_font_scale(1.0);
     muted(ui, "ca.description");
     ui.child_window("ca-sections").size([0.0, -48.0]).build(|| {
-        if let Some(error) = &app.error {
-            text(ui, "state.error");
-            ui.text_wrapped(error);
-        }
         let _disabled = ui.begin_disabled(app.busy);
-        text(ui, "ca.status_group");
+        ui.align_text_to_frame_padding();
+        text(ui, "ca.info_group");
         ui.same_line_with_pos(ui.window_content_region_max()[0] - 88.0);
         if ui.button_with_size(label("action.refresh", "inspect-ca"), [88.0, 28.0]) {
             actions.push(Action::InspectCa);
         }
+        ui.separator();
+        let value_x = ui.cursor_pos()[0] + 148.0;
+        muted(ui, "ca.status_group");
+        ui.same_line_with_pos(value_x);
         text(
             ui,
             if app.ca_missing {
@@ -247,9 +248,35 @@ pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
             actions.push(Action::GenerateCa);
         }
 
-        ui.dummy([0.0, 2.0]);
-        text(ui, "ca.info_group");
-        ui.separator();
+        if let Some(info) = &app.ca_info {
+            let now = time::OffsetDateTime::now_utc();
+            let validity = if now < info.not_before {
+                "ca.not_yet_valid"
+            } else if now >= info.not_after {
+                "ca.expired"
+            } else {
+                "ca.valid"
+            };
+            let date = |value: time::OffsetDateTime| {
+                value
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_else(|_| value.to_string())
+            };
+            let not_before = date(info.not_before);
+            let not_after = date(info.not_after);
+            for (key, value) in [
+                ("ca.subject", info.subject.as_str()),
+                ("ca.issuer", info.issuer.as_str()),
+                ("ca.serial_number", info.serial_number.as_str()),
+                ("ca.not_before", not_before.as_str()),
+                ("ca.not_after", not_after.as_str()),
+                ("ca.validity", rust_i18n::t!(validity).as_ref()),
+            ] {
+                muted(ui, key);
+                ui.same_line_with_pos(value_x);
+                ui.text_wrapped(value);
+            }
+        }
         let default_path = rust_i18n::t!("dashboard.default_path");
         information(
             ui,
@@ -304,19 +331,30 @@ pub fn certificate_dialog(ui: &Ui, app: &mut App, actions: &mut Vec<Action>) {
             label("ca.danger_group", "ca-danger"),
             imgui::TreeNodeFlags::empty(),
         ) {
-            muted(ui, "ca.danger_hint");
+            let recorded = app.preferences.trusted_fingerprint.is_some();
+            text(
+                ui,
+                if recorded {
+                    "ca.remove_before_regenerate"
+                } else {
+                    "ca.regenerate_hint"
+                },
+            );
+            {
+                let _recorded = ui.begin_disabled(
+                    !app.can_trust_ca()
+                        || !cfg!(target_os = "macos")
+                        || app.preferences.trusted_fingerprint != app.ca_fingerprint,
+                );
+                let _danger = ui.push_style_color(StyleColor::Text, [0.86, 0.28, 0.30, 1.0]);
+                if ui.button_with_size(label("ca.remove", "remove-ca"), [0.0, 32.0]) {
+                    actions.push(Action::RemoveCa);
+                }
+            }
             ui.checkbox(label("ca.overwrite", "overwrite-ca"), &mut app.ca_overwrite);
+            let _regenerate = ui.begin_disabled(recorded || !app.ca_overwrite);
             if ui.button_with_size(label("ca.regenerate", "regenerate-ca"), [0.0, 32.0]) {
                 actions.push(Action::GenerateCa);
-            }
-            let _recorded = ui.begin_disabled(
-                !app.can_trust_ca()
-                    || !cfg!(target_os = "macos")
-                    || app.preferences.trusted_fingerprint != app.ca_fingerprint,
-            );
-            let _danger = ui.push_style_color(StyleColor::Text, [0.86, 0.28, 0.30, 1.0]);
-            if ui.button_with_size(label("ca.remove", "remove-ca"), [0.0, 32.0]) {
-                actions.push(Action::RemoveCa);
             }
         }
     });

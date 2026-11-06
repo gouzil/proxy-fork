@@ -168,16 +168,33 @@ impl Desktop {
                     Action::GenerateCa => {
                         anyhow::ensure!(
                             !overwrite || recorded.is_none(),
-                            "remove the recorded CA trust before overwriting its files"
+                            "{}",
+                            proxy_fork_gui::_rust_i18n_translate(
+                                &rust_i18n::locale(),
+                                "ca.remove_before_regenerate"
+                            )
                         );
                         let cert = cert.context("no certificate directory")?;
                         let key = key.context("no private key directory")?;
-                        let (generated, keychain) = tokio::task::spawn_blocking(move || {
+                        let (generated, keychain, info) = tokio::task::spawn_blocking(move || {
                             let generated = proxy_fork_core::generate_ca(&cert, &key, overwrite)?;
-                            Ok::<_, anyhow::Error>((generated, platform::keychain_path().ok()))
+                            let info = proxy_fork_core::certificate_info(&cert)?;
+                            anyhow::ensure!(
+                                info.fingerprint == generated.fingerprint,
+                                "{}",
+                                proxy_fork_gui::_rust_i18n_translate(
+                                    &rust_i18n::locale(),
+                                    "ca.changed_during_inspection"
+                                )
+                            );
+                            Ok::<_, anyhow::Error>((
+                                generated,
+                                platform::keychain_path().ok(),
+                                info,
+                            ))
                         })
                         .await??;
-                        Ok(Outcome::Certificate(generated, keychain))
+                        Ok(Outcome::Certificate(generated, keychain, info))
                     }
                     Action::InspectCa => {
                         let cert = cert.context("no certificate directory")?;
@@ -189,11 +206,26 @@ impl Desktop {
                             else {
                                 return Ok(Outcome::CaNotConfigured(recorded));
                             };
+                            let info = proxy_fork_core::certificate_info(&cert)?;
+                            anyhow::ensure!(
+                                info.fingerprint == fingerprint,
+                                "{}",
+                                proxy_fork_gui::_rust_i18n_translate(
+                                    &rust_i18n::locale(),
+                                    "ca.changed_during_inspection"
+                                )
+                            );
                             Ok::<_, anyhow::Error>(Outcome::Trust {
+                                notice: if trusted {
+                                    "ca.trusted"
+                                } else {
+                                    "ca.untrusted"
+                                },
                                 fingerprint,
                                 trusted,
                                 recorded,
                                 keychain: platform::keychain_path().ok(),
+                                info: Some(info),
                             })
                         })
                         .await?
@@ -221,10 +253,12 @@ impl Desktop {
                         })
                         .await??;
                         Ok(Outcome::Trust {
+                            notice: "ca.trust_installed",
                             fingerprint,
                             trusted,
                             recorded,
                             keychain: Some(keychain),
+                            info: None,
                         })
                     }
                     Action::RemoveCa => {
@@ -242,10 +276,12 @@ impl Desktop {
                         tokio::task::spawn_blocking(move || preferences.save(&preferences_path))
                             .await??;
                         Ok(Outcome::Trust {
+                            notice: "ca.removed",
                             fingerprint,
                             trusted: false,
                             recorded: None,
                             keychain: target_keychain,
+                            info: None,
                         })
                     }
                     Action::EnableAutostart | Action::DisableAutostart => {
@@ -352,10 +388,11 @@ impl Desktop {
                                     "state.preferences_failed"
                                 )
                             );
-                            self.app.error = Some(match self.app.error.take() {
+                            let error = match self.app.error.take() {
                                 Some(previous) => format!("{previous}\n{warning}"),
                                 None => warning,
-                            });
+                            };
+                            self.app.report_error(error);
                             self.app.exiting = false;
                             self.show();
                         }
@@ -367,10 +404,12 @@ impl Desktop {
                     Outcome::Preferences => {
                         message = "state.saved";
                     }
-                    Outcome::Certificate(ca, keychain) => {
+                    Outcome::Certificate(ca, keychain, info) => {
+                        message = "ca.generated";
                         self.app.cert_path = ca.cert_path.display().to_string();
                         self.app.key_path = ca.key_path.display().to_string();
                         self.app.ca_fingerprint = Some(ca.fingerprint);
+                        self.app.ca_info = Some(info);
                         self.app.ca_keychain = keychain;
                         self.app.ca_trusted = Some(false);
                         self.app.ca_missing = false;
@@ -383,12 +422,18 @@ impl Desktop {
                         message = "ca.not_configured";
                     }
                     Outcome::Trust {
+                        notice,
                         fingerprint,
                         trusted,
                         recorded,
                         keychain,
+                        info,
                     } => {
+                        message = notice;
                         self.app.ca_fingerprint = Some(fingerprint.clone());
+                        if let Some(info) = info {
+                            self.app.ca_info = Some(info);
+                        }
                         self.app.ca_keychain = keychain;
                         self.app.ca_trusted = Some(trusted);
                         self.app.ca_missing = false;
@@ -471,7 +516,8 @@ impl ApplicationHandler<AppEvent> for Desktop {
                             self.tray = Some(tray);
                         }
                         Err(error) => {
-                            self.app.error = Some(format!("Tray initialization failed: {error}"));
+                            self.app
+                                .report_error(format!("Tray initialization failed: {error}"));
                             self.background = false;
                         }
                     }
@@ -490,18 +536,19 @@ impl ApplicationHandler<AppEvent> for Desktop {
                 if let Some(path) = self.ready_path.take()
                     && let Err(error) = proxy_fork_core::app_config::atomic_write(&path, b"ready")
                 {
-                    self.app.error = Some(error.to_string());
+                    self.app.report_error(error.to_string());
                 }
             }
             Err(error) => {
                 tracing::error!("GUI initialization failed: {error:#}");
-                self.app.error = Some(error.to_string());
+                self.app.report_error(error.to_string());
                 event_loop.exit();
             }
         }
     }
     fn new_events(&mut self, _: &ActiveEventLoop, cause: StartCause) {
         if matches!(cause, StartCause::ResumeTimeReached { .. }) {
+            self.app.expire_notice(Instant::now());
             self.request_redraw();
         }
     }
@@ -587,6 +634,7 @@ impl ApplicationHandler<AppEvent> for Desktop {
             }
             WindowEvent::RedrawRequested => {
                 if self.visible.load(Ordering::Relaxed) {
+                    self.app.expire_notice(Instant::now());
                     let theme = self.app.preferences.theme;
                     let result = self
                         .graphics
@@ -599,7 +647,8 @@ impl ApplicationHandler<AppEvent> for Desktop {
                             }
                         }
                         Some(Err(error)) => {
-                            self.app.error = Some(format!("Rendering failed: {error:#}"));
+                            self.app
+                                .report_error(format!("Rendering failed: {error:#}"));
                         }
                         None => {}
                     }
@@ -668,22 +717,31 @@ impl ApplicationHandler<AppEvent> for Desktop {
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let visible = self.visible.load(Ordering::Relaxed);
         let active = self.visible.load(Ordering::Relaxed)
             && self
                 .graphics
                 .as_ref()
                 .is_some_and(|g| g.window.has_focus() && g.text_active);
-        if active || (self.visible.load(Ordering::Relaxed) && !self.held_keys.is_empty()) {
-            let deadline = Instant::now()
-                + if self.held_keys.is_empty() {
-                    Duration::from_millis(250)
-                } else {
-                    Duration::from_millis(16)
-                };
-            self.deadline = Some(deadline);
+        let input_deadline = if active || (visible && !self.held_keys.is_empty()) {
+            Some(
+                Instant::now()
+                    + if self.held_keys.is_empty() {
+                        Duration::from_millis(250)
+                    } else {
+                        Duration::from_millis(16)
+                    },
+            )
+        } else {
+            None
+        };
+        self.deadline = input_deadline
+            .into_iter()
+            .chain(self.app.notice_deadline.filter(|_| visible))
+            .min();
+        if let Some(deadline) = self.deadline {
             event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
         } else {
-            self.deadline = None;
             event_loop.set_control_flow(ControlFlow::Wait);
         }
     }
@@ -751,9 +809,11 @@ fn main() -> Result<()> {
         .map(|e| e.to_string());
     let mut app = App::new(config.unwrap_or_default(), preferences.unwrap_or_default());
     rust_i18n::set_locale(&app.preferences.locale);
-    app.error = startup_error;
+    if let Some(error) = startup_error {
+        app.report_error(error);
+    }
     if args.iter().any(|arg| arg == "--update-rolled-back") {
-        app.error = Some(
+        app.report_error(
             proxy_fork_gui::_rust_i18n_translate(&rust_i18n::locale(), "update.rolled_back")
                 .into_owned(),
         );

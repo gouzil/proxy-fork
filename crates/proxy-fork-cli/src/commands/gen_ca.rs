@@ -35,17 +35,11 @@ pub(crate) async fn gen_ca(args: &GenCaArgs) -> Result<()> {
         .clone()
         .unwrap_or_else(|| default_private_key_path().unwrap());
 
-    // 如果使用默认路径且文件已存在，确认覆盖
-    let using_defaults = args.ca_cert.is_none() && args.ca_key.is_none();
-    if using_defaults {
-        if !confirm_overwrite(&mut io::stdin().lock(), &cert_path)? {
-            info!("Certificate generation cancelled by user.");
-            return Ok(());
-        }
-        if !confirm_overwrite(&mut io::stdin().lock(), &key_path)? {
-            info!("Certificate generation cancelled by user.");
-            return Ok(());
-        }
+    if !confirm_overwrite(&mut io::stdin().lock(), &cert_path)?
+        || !confirm_overwrite(&mut io::stdin().lock(), &key_path)?
+    {
+        info!("Certificate generation cancelled by user.");
+        return Ok(());
     }
 
     generate_ca(&cert_path, &key_path, true)?;

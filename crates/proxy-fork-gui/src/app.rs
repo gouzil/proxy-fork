@@ -4,6 +4,7 @@ use proxy_fork_core::{
     app_config::{AppConfig, RuleItem},
     proxy_service::ProxyServiceState,
 };
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -76,7 +77,9 @@ pub struct App {
     pub exiting: bool,
     pub exit_ready: bool,
     pub notice: Option<String>,
+    pub notice_deadline: Option<Instant>,
     pub error: Option<String>,
+    pub error_dialog: Option<String>,
     pub rule_save_error: Option<String>,
     pub config_save_error: Option<String>,
     pub config_dirty: bool,
@@ -92,6 +95,7 @@ pub struct App {
     pub ca_confirm: bool,
     pub ca_overwrite: bool,
     pub ca_fingerprint: Option<String>,
+    pub ca_info: Option<proxy_fork_core::CertificateInfo>,
     pub ca_keychain: Option<String>,
     pub ca_trusted: Option<bool>,
     pub ca_missing: bool,
@@ -147,7 +151,9 @@ impl App {
             exiting: false,
             exit_ready: false,
             notice: None,
+            notice_deadline: None,
             error: None,
+            error_dialog: None,
             rule_save_error: None,
             config_save_error: None,
             config_dirty: false,
@@ -162,6 +168,7 @@ impl App {
             ca_confirm: false,
             ca_overwrite: false,
             ca_fingerprint: None,
+            ca_info: None,
             ca_keychain: None,
             ca_trusted: None,
             ca_missing: false,
@@ -332,9 +339,16 @@ impl App {
         if action == Action::Save {
             self.config_dirty = false;
         }
-        self.notice = None;
+        if !matches!(
+            action,
+            Action::Save | Action::SaveRules | Action::SavePreferences
+        ) {
+            self.notice = None;
+            self.notice_deadline = None;
+        }
         if action == Action::InspectCa {
             self.ca_fingerprint = None;
+            self.ca_info = None;
             self.ca_keychain = None;
             self.ca_trusted = None;
             self.ca_confirm = false;
@@ -359,20 +373,40 @@ impl App {
             self.request_config_save();
         }
         match result {
-            Ok(message) => self.notice = Some(message),
+            Ok(message) => {
+                let now = Instant::now();
+                self.expire_notice(now);
+                if message != "state.saved" || self.notice.is_none() {
+                    self.notice = Some(message);
+                    self.notice_deadline = Some(now + Duration::from_secs(3));
+                }
+            }
             Err(error) => {
                 if saving_rules {
                     self.rule_save_error = Some(error);
                 } else if saving_config {
                     self.config_save_error = Some(error);
                 } else {
-                    self.error = Some(match self.error.take() {
+                    let error = match self.error.take() {
                         Some(previous) => format!("{previous}\n{error}"),
                         None => error,
-                    });
+                    };
+                    self.report_error(error);
                 }
                 self.exiting = false;
             }
+        }
+    }
+    pub fn report_error(&mut self, error: String) {
+        self.error = Some(error.clone());
+        self.error_dialog = Some(error);
+        self.notice = None;
+        self.notice_deadline = None;
+    }
+    pub fn expire_notice(&mut self, now: Instant) {
+        if self.notice_deadline.is_some_and(|deadline| now >= deadline) {
+            self.notice = None;
+            self.notice_deadline = None;
         }
     }
     pub fn running(&self) -> bool {
@@ -383,6 +417,7 @@ impl App {
     }
     pub fn ca_not_configured(&mut self, recorded: Option<String>) {
         self.ca_fingerprint = None;
+        self.ca_info = None;
         self.ca_keychain = None;
         self.ca_trusted = None;
         self.ca_missing = true;
